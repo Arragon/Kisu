@@ -27,6 +27,11 @@ describe("translation box defaults", () => {
     expect(DEFAULT_TRANBOX_SETTING.skipLangs).toEqual([]);
   });
 
+  test("does not remember the subtitle position by default", () => {
+    expect(DEFAULT_SUBTITLE_SETTING.rememberPosition).toBe(false);
+    expect(DEFAULT_SUBTITLE_SETTING.positionRatio).toBe(0.05);
+  });
+
   test("follows the current page rule for hover bubbles by default", () => {
     expect(DEFAULT_MOUSE_HOVER_SETTING.apiSlug).toBe(GLOBAL_KEY);
   });

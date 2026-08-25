@@ -5129,6 +5129,15 @@ export const I18N = {
     tr: `İşlev Düğmesini Gizle`,
     vi: "Ẩn nút chức năng",
   },
+  remember_subtitle_position: {
+    zh: `记住字幕位置`,
+    en: `Remember subtitle position`,
+    zh_TW: `記住字幕位置`,
+    ja: `字幕位置を記憶`,
+    ko: `자막 위치 기억`,
+    tr: `Altyazı konumunu hatırla`,
+    vi: `Ghi nhớ vị trí phụ đề`,
+  },
   subtitle_hover_lookup: {
     zh: `悬停查词`,
     en: `Hover Word Lookup`,
