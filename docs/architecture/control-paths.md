@@ -3,7 +3,26 @@
 Authority: `KISU-ROADMAP-v2.md` P0-T05. This is the gating artefact for P1: every later KCL
 task must be able to name the exact existing upstream mechanism it wraps.
 
-Baseline traced: **KISS v2.0.32 (`7dfc03eb`)**. All line references are against that commit.
+Baseline traced: **KISS v2.0.32 (`7dfc03eb`)**, as published, without the exceptional
+upstream intakes. All line references are against that commit and are exact on `main`.
+
+> **Reference drift on `next`.** Four exceptional upstream intakes (EU-001 to EU-004, see
+> `docs/upstream/baseline.json`) are carried on `next` only. They modify twelve non-test
+> files, so line numbers inside those files shift on that branch:
+>
+> ```text
+> src/apis/index.js                        src/apis/trans.js
+> src/config/api.js                        src/config/i18n.js
+> src/config/setting.js                    src/subtitle/BilingualSubtitleManager.js
+> src/subtitle/YouTubeCaptionProvider.js   src/subtitle/subtitle.js
+> src/views/Action/Draggable.js            src/views/Options/Subtitle.js
+> src/views/Selection/TranCont.js          src/views/Selection/TranForm.js
+> ```
+>
+> References into these files — most notably the selection decision logic in `TranForm.js`
+> and the subtitle settings and state tables — are exact on `main` and approximate on
+> `next`. Every reference below also names the symbol, so on `next` re-locate by symbol,
+> not by line number. Re-derive the affected references once the intake set is settled.
 
 Every path below uses the same structure: entry files, state/settings fields, key
 functions, message/event boundaries, likely KCL seam, TRACK-protected files.

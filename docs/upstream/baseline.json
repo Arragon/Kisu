@@ -11,8 +11,56 @@
     "observedAt": "2026-09-13",
     "commitsAheadOfBaseline": 44
   },
-  "exceptionalUpstreamPatches": [],
+  "exceptionalUpstreamPatches": [
+    {
+      "id": "EU-001",
+      "upstreamCommit": "ca4ea90970ca4868de947463951033d7a77d1d2d",
+      "upstreamPr": 1045,
+      "title": "Remember subtitle position across videos",
+      "carriedOn": "next",
+      "localCommit": "749f5d744ee0e30ede65c5a5637563c3808e8baa",
+      "reason": "User-visible defect in core flow 3 (YouTube subtitles): the subtitle position resets on every video. P5 builds directly on this subsystem, so carrying the fix is cheaper than working against a known defect."
+    },
+    {
+      "id": "EU-002",
+      "upstreamCommit": "f5f543a291eb2fcd7885400828d694579fd7011e",
+      "upstreamPr": 1051,
+      "title": "fix(gemini): stop sending the unsupported minimal thinking level to 3.x non-lite flash models",
+      "carriedOn": "next",
+      "localCommit": "230375d12ce63cdaaf17602f5cb70bcb99c739e9",
+      "reason": "Provider-level request defect: an unsupported parameter was sent to Gemini 3.x non-lite flash models. Self-contained in src/apis/trans.js and src/config/api.js."
+    },
+    {
+      "id": "EU-003",
+      "upstreamCommit": "02d362ea7e59c7ca991fc7e9221db81743bbf215",
+      "upstreamPr": 1061,
+      "title": "fix(webui): floating button disappears when its cross-viewport coordinates overflow",
+      "carriedOn": "next",
+      "localCommit": "d8760c728a6e8ef8193dee67c338b7c9a85a6ccf",
+      "reason": "User-visible defect in core flow 2 (selection entry point): the floating button can vanish. Small, 2 files."
+    },
+    {
+      "id": "EU-004",
+      "upstreamCommit": "c95bd46bead3a0e5947428f2b3b4ebb193be9207",
+      "upstreamPr": 1050,
+      "title": "fix(builtinai): fall back to the configured detection service when the built-in LanguageDetector is unavailable",
+      "carriedOn": "next",
+      "localCommit": "3a7a4e86cc176410983f4431e13183ffd17aa450",
+      "reason": "BuiltinAI translation failed outright with fromLang=auto on Chrome below 127, with built-in AI disabled, or with the model not downloaded, even when a remote detection service was configured. Also fixes a stale language-detection race in the selection surface.",
+      "note": "Touches src/views/Selection/TranForm.js and TranCont.js, the files control-paths.md documents as the selection decision layer. See the reference drift section of that document."
+    }
+  ],
   "baselineEstablishedAt": "2026-09-13",
+  "branchPolicy": {
+    "main": "Pristine stable baseline (v2.0.32) plus Kisu governance documents. No exceptional intakes.",
+    "next": "Integration branch. Carries EU-001 through EU-004 on top of the main baseline.",
+    "note": "Exceptional intakes are carried on next only, so main stays exactly reproducible and control-path line references against it remain valid. Promote them to main through normal integration once upstream ships them in a stable release, or earlier by explicit decision."
+  },
+  "namingConvention": {
+    "EU-nnn": "Exceptional upstream intake: an upstream commit taken ahead of a stable release.",
+    "KP-nnn": "Kisu-carried patch: Kisu's own modification to TRACK-owned upstream code.",
+    "note": "KISU-ARCHITECTURE-v2.md section 4.7 uses the KP- prefix in its example for exceptionalUpstreamPatches, while section 5 uses the same KP- prefix for Kisu's own modifications. The id spaces were split into EU- and KP- to keep them unambiguous. See docs/issues.md."
+  },
   "provenance": {
     "initialForkBase": "c95bd46bead3a0e5947428f2b3b4ebb193be9207",
     "initialForkBaseDate": "2026-08-29",
@@ -22,6 +70,7 @@
   "notes": [
     "Baseline rule: stable KISS releases are the normal integration source; upstream dev is a watch stream only (ADR-003).",
     "origin/dev still holds the pre-re-baseline content (fork base c95bd46b plus the design docs). It is legacy and must not be used as an integration source.",
-    "The 35 commits sitting on top of v2.0.32 are deliberately not part of main. Anything genuinely required from them must be evaluated through the upstream intake process as exceptional early intake, never cherry-picked silently."
+    "Of the 44 commits between the baseline and the observed dev HEAD, 4 were taken as exceptional intakes and 40 remain outstanding. Nothing may be cherry-picked silently; see docs/issues.md.",
+    "The exceptional intakes are not runtime-verified. P0-T02 (upstream build/test baseline) is shelved, so no test suite has been run against them."
   ]
 }
