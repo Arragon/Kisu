@@ -1,0 +1,27 @@
+{
+  "kisuVersion": "0.0.0-dev",
+  "kissBaseline": {
+    "release": "v2.0.32",
+    "commit": "7dfc03ebc7f10530681109f6a5aec982a5573936",
+    "tagObject": "a7a2faa955ea5ab8b05b17c75d64f1ac9f64c428",
+    "releasedAt": "2026-08-12T18:28:47Z"
+  },
+  "watchedDev": {
+    "commit": "226e5780f5ccee1cd42d4167518632318c2f7d7b",
+    "observedAt": "2026-09-13",
+    "commitsAheadOfBaseline": 44
+  },
+  "exceptionalUpstreamPatches": [],
+  "baselineEstablishedAt": "2026-09-13",
+  "provenance": {
+    "initialForkBase": "c95bd46bead3a0e5947428f2b3b4ebb193be9207",
+    "initialForkBaseDate": "2026-08-29",
+    "initialForkBaseCommitsAheadOfBaseline": 35,
+    "note": "The fork was originally taken from the upstream dev HEAD rather than from the stable tag. Kisu main has been re-baselined onto the v2.0.32 tag to comply with ADR-003."
+  },
+  "notes": [
+    "Baseline rule: stable KISS releases are the normal integration source; upstream dev is a watch stream only (ADR-003).",
+    "origin/dev still holds the pre-re-baseline content (fork base c95bd46b plus the design docs). It is legacy and must not be used as an integration source.",
+    "The 35 commits sitting on top of v2.0.32 are deliberately not part of main. Anything genuinely required from them must be evaluated through the upstream intake process as exceptional early intake, never cherry-picked silently."
+  ]
+}
