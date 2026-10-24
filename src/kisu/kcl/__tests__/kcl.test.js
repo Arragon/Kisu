@@ -44,12 +44,13 @@ describe("KCL result contract (MVP-05)", () => {
     expect(() => kclError("NOT_A_CODE", "x")).toThrow(TypeError);
   });
 
-  it("error codes cover the five contract codes exactly", () => {
+  it("error codes cover the contract codes exactly", () => {
     expect(Object.keys(KCL_ERROR_CODES).sort()).toEqual([
       "CAPTION_UNAVAILABLE",
       "CONTEXT_UNSUPPORTED",
       "PROVIDER_DISABLED",
       "PROVIDER_NOT_FOUND",
+      "TRANSPORT_UNAVAILABLE",
       "UNSUPPORTED_INPUT",
     ]);
     expect(Object.isFrozen(KCL_ERROR_CODES)).toBe(true);
@@ -100,15 +101,21 @@ describe("KCL capabilities (MVP-05)", () => {
 });
 
 describe("KCL skeleton export surface (MVP-05)", () => {
-  it("re-exports exactly the documented skeleton surface", () => {
+  it("re-exports exactly the documented surface", () => {
     expect(Object.keys(kcl).sort()).toEqual([
       "KCL_ERROR_CODES",
       "KISU_VERSION",
+      "PAGE_DISPLAY_ORDERS",
       "isCapabilitySupported",
       "isKclResult",
+      "isMatch",
+      "isSiteBlacklisted",
       "kclCapability",
       "kclError",
       "kclOk",
+      "normalizePageState",
+      "readPageState",
+      "subscribePageState",
     ]);
     expect(kcl.KISU_VERSION).toBe(KISU_VERSION);
   });
