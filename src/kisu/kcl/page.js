@@ -2,8 +2,8 @@
 // 只包装上游 Popup 已有机制（docs/architecture/control-paths.md Path 1）：
 // 状态经 MSG_TRANS_GETRULE 拉取，本模块不读写 storage、不复制规则引擎。
 // 上游无订阅通道，活跃态按 ADR-014 以 pull-only 轮询同步。
-import { MSG_TRANS_GETRULE } from "../../config/msg";
-import { GLOBLA_RULE } from "../../config/rules";
+import { MSG_TRANS_GETRULE, MSG_TRANS_PUTRULE, MSG_TRANS_TOGGLE, MSG_SAVE_RULE } from "../../config/msg";
+import { GLOBLA_RULE, GLOBAL_KEY } from "../../config/rules";
 import { kclOk, kclError } from "./result";
 import { isSiteBlacklisted } from "./sites";
 
@@ -131,4 +131,283 @@ export const subscribePageState = (
     stopped = true;
     clearInterval(timer);
   };
+};
+
+// ---------------------------------------------------------------------------
+// 写命令（MVP-07 / INH-1148）。
+// 上游 `toggle()` 非幂等、`updateRule` 只改运行态不落盘（control-paths Path 1 陷阱），
+// 故 set 语义一律由「GETRULE 读 → 校验 → TOGGLE/PUTRULE」组合实现（D4：M0 不引入
+// KP-003 消息路由）。落盘走 MSG_SAVE_RULE（background 通道），黑名单增删无消息通道、
+// 需注入 setting 读写器（popup 侧可用 storage hooks 提供实现）。
+//
+// transport 形态：{ sendTab(action, args?), sendBg(action, args)?, readSetting()?,
+// writeSetting(updater)? }；也接受裸函数（视为仅 sendTab，可用于除落盘/黑名单外的一切）。
+
+const asTransport = (transport) => {
+  if (typeof transport === "function") {
+    return { sendTab: transport };
+  }
+  if (
+    transport &&
+    typeof transport === "object" &&
+    typeof transport.sendTab === "function"
+  ) {
+    return transport;
+  }
+  return null;
+};
+
+const transportError = (detail) =>
+  kclError("TRANSPORT_UNAVAILABLE", detail);
+
+const fetchRuleContext = async (sendTab) => {
+  let res;
+  try {
+    res = await sendTab(MSG_TRANS_GETRULE);
+  } catch (err) {
+    return transportError(
+      `page state request failed: ${err && err.message ? err.message : String(err)}`
+    );
+  }
+  if (!res || res.error || !res.rule) {
+    return transportError(
+      "no page rule available (content script not connected or returned error)"
+    );
+  }
+  return kclOk(res);
+};
+
+// 开/关页面翻译。目标态与当前态一致时不发消息（上游 toggle 非幂等，禁止盲发）。
+export const setPageTranslation = async (transport, { active } = {}) => {
+  const t = asTransport(transport);
+  if (!t) {
+    return kclError("UNSUPPORTED_INPUT", "page commands require a transport with sendTab");
+  }
+  if (typeof active !== "boolean") {
+    return kclError("UNSUPPORTED_INPUT", "setPageTranslation requires { active: boolean }");
+  }
+  const ctx = await fetchRuleContext(t.sendTab);
+  if (!ctx.ok) {
+    return ctx;
+  }
+  if ((ctx.value.rule.transOpen === "true") !== active) {
+    let res;
+    try {
+      res = await t.sendTab(MSG_TRANS_TOGGLE);
+    } catch (err) {
+      return transportError(`toggle failed: ${err && err.message ? err.message : String(err)}`);
+    }
+    if (res && res.error) {
+      return transportError(`toggle rejected: ${res.error}`);
+    }
+  }
+  return kclOk(
+    normalizePageState({
+      rule: { ...ctx.value.rule, transOpen: active ? "true" : "false" },
+      setting: ctx.value.setting,
+    })
+  );
+};
+
+// 设置显示模式（transOnly × transOrder）。两字段至少提供一个；均为运行态修改，
+// 不落盘——持久化由 saveSiteRule 显式触发，与 Popup 行为一致。
+export const setPageDisplayMode = async (
+  transport,
+  { onlyTranslation, order } = {}
+) => {
+  const t = asTransport(transport);
+  if (!t) {
+    return kclError("UNSUPPORTED_INPUT", "page commands require a transport with sendTab");
+  }
+  if (onlyTranslation === undefined && order === undefined) {
+    return kclError("UNSUPPORTED_INPUT", "setPageDisplayMode requires onlyTranslation and/or order");
+  }
+  if (onlyTranslation !== undefined && typeof onlyTranslation !== "boolean") {
+    return kclError("UNSUPPORTED_INPUT", "onlyTranslation must be boolean");
+  }
+  if (order !== undefined && !PAGE_DISPLAY_ORDERS.includes(order)) {
+    return kclError("UNSUPPORTED_INPUT", `order must be one of ${PAGE_DISPLAY_ORDERS.join(", ")}`);
+  }
+  const patch = {};
+  if (onlyTranslation !== undefined) {
+    patch.transOnly = onlyTranslation ? "true" : "false";
+  }
+  if (order !== undefined) {
+    patch.transOrder = order;
+  }
+  return putRulePatch(t, patch);
+};
+
+// 设置页面 Provider。setting.transApis 可得时做存在性校验（未找到 → PROVIDER_NOT_FOUND）；
+// GLOBAL_KEY("*") 表示继承全局，允许。
+export const setPageProvider = async (transport, { apiSlug } = {}) => {
+  const t = asTransport(transport);
+  if (!t) {
+    return kclError("UNSUPPORTED_INPUT", "page commands require a transport with sendTab");
+  }
+  if (typeof apiSlug !== "string" || !apiSlug) {
+    return kclError("UNSUPPORTED_INPUT", "setPageProvider requires { apiSlug: non-empty string }");
+  }
+  const ctx = await fetchRuleContext(t.sendTab);
+  if (!ctx.ok) {
+    return ctx;
+  }
+  const apis =
+    ctx.value.setting && Array.isArray(ctx.value.setting.transApis)
+      ? ctx.value.setting.transApis
+      : null;
+  if (
+    apis &&
+    apiSlug !== GLOBAL_KEY &&
+    !apis.some((a) => a && a.apiSlug === apiSlug)
+  ) {
+    return kclError(
+      "PROVIDER_NOT_FOUND",
+      `provider "${apiSlug}" is not present in setting.transApis`
+    );
+  }
+  return putRulePatch(t, { apiSlug }, ctx);
+};
+
+// 设置目标语言。仅做非空校验——KCL 不维护第二份语言 registry（MVP-20 的语言表
+// 校验由产品层复用上游 OPT_LANGS_TO 完成）。
+export const setPageTargetLanguage = async (transport, { toLang } = {}) => {
+  const t = asTransport(transport);
+  if (!t) {
+    return kclError("UNSUPPORTED_INPUT", "page commands require a transport with sendTab");
+  }
+  if (typeof toLang !== "string" || !toLang) {
+    return kclError("UNSUPPORTED_INPUT", "setPageTargetLanguage requires { toLang: non-empty string }");
+  }
+  return putRulePatch(t, { toLang });
+};
+
+const putRulePatch = async (t, patch, preloadedCtx) => {
+  const ctx = preloadedCtx || (await fetchRuleContext(t.sendTab));
+  if (!ctx.ok) {
+    return ctx;
+  }
+  let res;
+  try {
+    res = await t.sendTab(MSG_TRANS_PUTRULE, patch);
+  } catch (err) {
+    return transportError(
+      `putrule failed: ${err && err.message ? err.message : String(err)}`
+    );
+  }
+  if (res && res.error) {
+    return transportError(`putrule rejected: ${res.error}`);
+  }
+  return kclOk(
+    normalizePageState({
+      rule: { ...ctx.value.rule, ...patch },
+      setting: ctx.value.setting,
+    })
+  );
+};
+
+// 将当前页面运行态规则（可叠加 patch）以指定 pattern 持久化为站点规则。
+// 复刻 Popup handleSaveRule：整规则 + pattern 经 MSG_SAVE_RULE 发往 background，
+// 由上游 saveRule 做模糊合并与全局等值剥离（rules.js:404，含其已知误合并隐患）。
+export const saveSiteRule = async (transport, { pattern, patch } = {}) => {
+  const t = asTransport(transport);
+  if (!t) {
+    return kclError("UNSUPPORTED_INPUT", "page commands require a transport with sendTab");
+  }
+  if (typeof pattern !== "string" || !pattern) {
+    return kclError("UNSUPPORTED_INPUT", "saveSiteRule requires { pattern: non-empty string }");
+  }
+  if (typeof t.sendBg !== "function") {
+    return transportError("saveSiteRule requires transport.sendBg (background channel)");
+  }
+  const ctx = await fetchRuleContext(t.sendTab);
+  if (!ctx.ok) {
+    return ctx;
+  }
+  const curRule = { ...ctx.value.rule, ...(patch || {}), pattern };
+  let res;
+  try {
+    res = await t.sendBg(MSG_SAVE_RULE, curRule);
+  } catch (err) {
+    return transportError(
+      `save rule failed: ${err && err.message ? err.message : String(err)}`
+    );
+  }
+  if (res && res.error) {
+    return transportError(`save rule rejected: ${res.error}`);
+  }
+  return kclOk(
+    normalizePageState({ rule: curRule, setting: ctx.value.setting })
+  );
+};
+
+// 站点策略：auto = 持久化站点规则并自动开翻译；never = 加入黑名单；
+// clear = 从黑名单移除。黑名单存于 setting（无消息通道），需注入
+// readSetting/writeSetting，缺失时明确失败而非静默假成功。
+// 与上游 handleAddToBlacklist 的差异：对完全相同的条目去重，避免重复 never
+// 产生冗余行（上游会重复追加）。
+export const setSitePreference = async (
+  transport,
+  { mode, pattern, domain } = {}
+) => {
+  const t = asTransport(transport);
+  if (!t) {
+    return kclError("UNSUPPORTED_INPUT", "page commands require a transport with sendTab");
+  }
+  if (mode !== "auto" && mode !== "never" && mode !== "clear") {
+    return kclError("UNSUPPORTED_INPUT", 'setSitePreference requires { mode: "auto" | "never" | "clear" }');
+  }
+  if (mode === "auto") {
+    if (typeof pattern !== "string" || !pattern) {
+      return kclError("UNSUPPORTED_INPUT", 'mode "auto" requires { pattern }');
+    }
+    return saveSiteRule(t, { pattern, patch: { transOpen: "true" } });
+  }
+
+  if (typeof domain !== "string" || !domain) {
+    return kclError("UNSUPPORTED_INPUT", `mode "${mode}" requires { domain }`);
+  }
+  if (
+    typeof t.readSetting !== "function" ||
+    typeof t.writeSetting !== "function"
+  ) {
+    return transportError(
+      `mode "${mode}" requires transport.readSetting/writeSetting (blacklist lives in setting)`
+    );
+  }
+  let setting;
+  try {
+    setting = await t.readSetting();
+  } catch (err) {
+    return transportError(
+      `readSetting failed: ${err && err.message ? err.message : String(err)}`
+    );
+  }
+  const current = (setting && typeof setting.blacklist === "string")
+    ? setting.blacklist
+    : "";
+  const entries = current ? current.split(/\n|,/).map((u) => u.trim()).filter(Boolean) : [];
+  let next;
+  if (mode === "never") {
+    next = entries.includes(domain) ? entries : [...entries, domain];
+  } else {
+    next = entries.filter((u) => u !== domain);
+  }
+  try {
+    await t.writeSetting((pre) => ({
+      ...pre,
+      blacklist: next.join("\n"),
+    }));
+  } catch (err) {
+    return transportError(
+      `writeSetting failed: ${err && err.message ? err.message : String(err)}`
+    );
+  }
+  return kclOk(
+    Object.freeze({
+      mode,
+      domain,
+      blacklisted: mode === "never",
+    })
+  );
 };

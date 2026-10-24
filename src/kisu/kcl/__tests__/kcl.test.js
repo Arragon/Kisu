@@ -115,6 +115,12 @@ describe("KCL skeleton export surface (MVP-05)", () => {
       "kclOk",
       "normalizePageState",
       "readPageState",
+      "saveSiteRule",
+      "setPageDisplayMode",
+      "setPageProvider",
+      "setPageTargetLanguage",
+      "setPageTranslation",
+      "setSitePreference",
       "subscribePageState",
     ]);
     expect(kcl.KISU_VERSION).toBe(KISU_VERSION);

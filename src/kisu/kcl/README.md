@@ -40,6 +40,19 @@ kclError("PROVIDER_NOT_FOUND", "..."); // { ok: false, value: null, error: { cod
 `UNSUPPORTED_INPUT`、`CAPTION_UNAVAILABLE`、`CONTEXT_UNSUPPORTED`、
 `TRANSPORT_UNAVAILABLE`（消息通道不可用/无响应，如内容脚本未注入）。
 
+## Page 写命令 transport（MVP-07）
+
+命令接受 transport：`{ sendTab(action, args?), sendBg(action, args)?,
+readSetting()?, writeSetting(updater)? }`（或裸函数 = 仅 sendTab）。
+
+- 开/关由「GETRULE 读 + 条件 TOGGLE」组合实现幂等（上游 `toggle()` 非幂等，禁止盲发）
+- `MSG_TRANS_PUTRULE` 只改运行态；持久化显式走 `saveSiteRule`（`MSG_SAVE_RULE` →
+  background，由上游 `saveRule` 做模糊合并与全局等值剥离）
+- 黑名单存于 setting（无消息通道），`setSitePreference("never"/"clear")` 需注入
+  setting 读写器，缺失时明确失败
+- 已知未覆盖：站点规则的删除/停用语义（`saveRule` 的 enabled/removal 路径）未经验证，
+  留给 MVP-22（INH-1163）按证据补齐
+
 ## 禁止事项
 
 - 不在 KCL 内直接读写 storage（经注入的 transport adapter）
