@@ -71,6 +71,6 @@
     "Baseline rule: stable KISS releases are the normal integration source; upstream dev is a watch stream only (ADR-003).",
     "origin/dev still holds the pre-re-baseline content (fork base c95bd46b plus the design docs). It is legacy and must not be used as an integration source.",
     "Of the 44 commits between the baseline and the observed dev HEAD, 4 were taken as exceptional intakes and 40 remain outstanding. Nothing may be cherry-picked silently; see docs/issues.md.",
-    "The exceptional intakes are not runtime-verified. P0-T02 (upstream build/test baseline) is shelved, so no test suite has been run against them."
+    "The exceptional intakes passed targeted unit-level verification on 2026-10-24 (docs/upstream/eu-verification.md): 9 suites / 162 tests green across all four patches, plus a manual diff review of EU-004's src/apis/index.js addition. Browser smoke and a real Gemini 3.x non-lite request remain pending."
   ]
 }
