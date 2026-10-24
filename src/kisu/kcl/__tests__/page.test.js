@@ -1,10 +1,22 @@
 import { GLOBLA_RULE } from "../../../../src/config/rules";
 import { isMatch as upstreamIsMatch } from "../../../../src/libs/utils";
 import {
+  MSG_TRANS_GETRULE,
+  MSG_TRANS_PUTRULE,
+  MSG_TRANS_TOGGLE,
+  MSG_SAVE_RULE,
+} from "../../../../src/config/msg";
+import {
   normalizePageState,
   readPageState,
   subscribePageState,
   PAGE_DISPLAY_ORDERS,
+  setPageTranslation,
+  setPageDisplayMode,
+  setPageProvider,
+  setPageTargetLanguage,
+  saveSiteRule,
+  setSitePreference,
 } from "../page";
 import { isMatch, isSiteBlacklisted } from "../sites";
 import * as kcl from "../index";
@@ -266,5 +278,253 @@ describe("page surface re-exported from kcl index", () => {
     expect(typeof kcl.subscribePageState).toBe("function");
     expect(kcl.PAGE_DISPLAY_ORDERS).toEqual(["original-first", "translation-first"]);
     expect(PAGE_DISPLAY_ORDERS).toBe(kcl.PAGE_DISPLAY_ORDERS);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 写命令（MVP-07 / INH-1148）
+
+const makeTransport = (rule, setting, overrides = {}) => {
+  const calls = [];
+  return {
+    calls,
+    sendTab: async (action, args) => {
+      calls.push(["tab", action, args]);
+      return action === MSG_TRANS_GETRULE ? { rule, setting } : {};
+    },
+    sendBg: async (action, args) => {
+      calls.push(["bg", action, args]);
+      return {};
+    },
+    ...overrides,
+  };
+};
+const tabActions = (t) =>
+  t.calls.filter((c) => c[0] === "tab").map((c) => c[1]);
+const tabPutRulePatches = (t) =>
+  t.calls
+    .filter((c) => c[0] === "tab" && c[1] === MSG_TRANS_PUTRULE)
+    .map((c) => c[2]);
+
+describe("setPageTranslation (MVP-07)", () => {
+  it("sends no toggle when already in the target state", async () => {
+    const t = makeTransport(RULE_ACTIVE, SETTING); // transOpen "true"
+    const result = await setPageTranslation(t, { active: true });
+    expect(result.ok).toBe(true);
+    expect(result.value.translation).toBe("active");
+    expect(tabActions(t)).toEqual([MSG_TRANS_GETRULE]);
+  });
+
+  it("toggles exactly once when the state differs", async () => {
+    const t = makeTransport(RULE_ACTIVE, SETTING);
+    const result = await setPageTranslation(t, { active: false });
+    expect(result.ok).toBe(true);
+    expect(result.value.translation).toBe("idle");
+    expect(tabActions(t)).toEqual([MSG_TRANS_GETRULE, MSG_TRANS_TOGGLE]);
+  });
+
+  it("accepts a bare function transport", async () => {
+    const result = await setPageTranslation(
+      async (action) =>
+        action === MSG_TRANS_GETRULE ? { rule: RULE_ACTIVE, setting: SETTING } : {},
+      { active: true }
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("rejects invalid arguments and transports", async () => {
+    expect((await setPageTranslation(makeTransport(), {})).error.code).toBe(
+      "UNSUPPORTED_INPUT"
+    );
+    expect((await setPageTranslation(null, { active: true })).error.code).toBe(
+      "UNSUPPORTED_INPUT"
+    );
+  });
+
+  it("maps transport failures to TRANSPORT_UNAVAILABLE", async () => {
+    const t = {
+      sendTab: async () => {
+        throw new Error("tab gone");
+      },
+    };
+    expect((await setPageTranslation(t, { active: true })).error.code).toBe(
+      "TRANSPORT_UNAVAILABLE"
+    );
+  });
+});
+
+describe("setPageDisplayMode (MVP-07)", () => {
+  it("patches transOnly / transOrder with upstream string values", async () => {
+    const t = makeTransport({ ...RULE_ACTIVE, transOnly: "false" }, SETTING);
+    const result = await setPageDisplayMode(t, { onlyTranslation: true });
+    expect(result.ok).toBe(true);
+    expect(result.value.displayMode.onlyTranslation).toBe(true);
+    expect(tabPutRulePatches(t)).toEqual([{ transOnly: "true" }]);
+
+    const t2 = makeTransport(RULE_ACTIVE, SETTING);
+    await setPageDisplayMode(t2, { order: "original-first" });
+    expect(tabPutRulePatches(t2)).toEqual([{ transOrder: "original-first" }]);
+  });
+
+  it("rejects empty patches and illegal values without sending", async () => {
+    const t = makeTransport(RULE_ACTIVE, SETTING);
+    expect((await setPageDisplayMode(t, {})).error.code).toBe("UNSUPPORTED_INPUT");
+    expect(
+      (await setPageDisplayMode(t, { onlyTranslation: "yes" })).error.code
+    ).toBe("UNSUPPORTED_INPUT");
+    expect(
+      (await setPageDisplayMode(t, { order: "weird" })).error.code
+    ).toBe("UNSUPPORTED_INPUT");
+    expect(tabActions(t)).toEqual([]);
+  });
+});
+
+describe("setPageProvider (MVP-07)", () => {
+  const SETTING_APIS = {
+    blacklist: "",
+    transApis: [
+      { apiSlug: "DeepL" },
+      { apiSlug: "Microsoft" },
+    ],
+  };
+
+  it("applies a provider present in setting.transApis", async () => {
+    const t = makeTransport(RULE_ACTIVE, SETTING_APIS);
+    const result = await setPageProvider(t, { apiSlug: "DeepL" });
+    expect(result.ok).toBe(true);
+    expect(result.value.provider.apiSlug).toBe("DeepL");
+    expect(tabPutRulePatches(t)).toEqual([{ apiSlug: "DeepL" }]);
+  });
+
+  it("fails with PROVIDER_NOT_FOUND for unknown slugs without sending", async () => {
+    const t = makeTransport(RULE_ACTIVE, SETTING_APIS);
+    const result = await setPageProvider(t, { apiSlug: "Nope" });
+    expect(result.error.code).toBe("PROVIDER_NOT_FOUND");
+    expect(tabActions(t)).toEqual([MSG_TRANS_GETRULE]);
+  });
+
+  it("allows GLOBAL_KEY inheritance and skips validation when transApis is absent", async () => {
+    const t1 = makeTransport(RULE_ACTIVE, SETTING_APIS);
+    expect((await setPageProvider(t1, { apiSlug: "*" })).ok).toBe(true);
+    const t2 = makeTransport(RULE_ACTIVE, {});
+    expect((await setPageProvider(t2, { apiSlug: "Anything" })).ok).toBe(true);
+  });
+
+  it("rejects missing slug", async () => {
+    expect(
+      (await setPageProvider(makeTransport(RULE_ACTIVE, SETTING), {})).error.code
+    ).toBe("UNSUPPORTED_INPUT");
+  });
+});
+
+describe("setPageTargetLanguage (MVP-07)", () => {
+  it("patches toLang", async () => {
+    const t = makeTransport(RULE_ACTIVE, SETTING);
+    const result = await setPageTargetLanguage(t, { toLang: "ja" });
+    expect(result.ok).toBe(true);
+    expect(result.value.targetLanguage).toBe("ja");
+    expect(tabPutRulePatches(t)).toEqual([{ toLang: "ja" }]);
+  });
+
+  it("rejects empty values", async () => {
+    const t = makeTransport(RULE_ACTIVE, SETTING);
+    expect((await setPageTargetLanguage(t, {})).error.code).toBe(
+      "UNSUPPORTED_INPUT"
+    );
+    expect(
+      (await setPageTargetLanguage(t, { toLang: "" })).error.code
+    ).toBe("UNSUPPORTED_INPUT");
+    expect(tabActions(t)).toEqual([]);
+  });
+});
+
+describe("saveSiteRule (MVP-07)", () => {
+  it("sends the full runtime rule with pattern and patch to background", async () => {
+    const t = makeTransport(RULE_ACTIVE, SETTING);
+    const result = await saveSiteRule(t, {
+      pattern: "example.com",
+      patch: { transOpen: "true" },
+    });
+    expect(result.ok).toBe(true);
+    const bgCall = t.calls.find((c) => c[0] === "bg");
+    expect(bgCall[1]).toBe(MSG_SAVE_RULE);
+    expect(bgCall[2].pattern).toBe("example.com");
+    expect(bgCall[2].transOpen).toBe("true");
+    expect(bgCall[2].apiSlug).toBe(RULE_ACTIVE.apiSlug);
+  });
+
+  it("requires the background channel and a pattern", async () => {
+    const noBg = makeTransport(RULE_ACTIVE, SETTING, { sendBg: undefined });
+    expect(
+      (await saveSiteRule(noBg, { pattern: "a.com" })).error.code
+    ).toBe("TRANSPORT_UNAVAILABLE");
+    const t = makeTransport(RULE_ACTIVE, SETTING);
+    expect((await saveSiteRule(t, {})).error.code).toBe("UNSUPPORTED_INPUT");
+  });
+});
+
+describe("setSitePreference (MVP-07)", () => {
+  const makeSettingTransport = (blacklist) => {
+    const t = makeTransport(RULE_ACTIVE, { blacklist });
+    let written = null;
+    t.readSetting = async () => ({ blacklist });
+    t.writeSetting = async (updater) => {
+      written = updater({ blacklist });
+    };
+    t.written = () => written;
+    return t;
+  };
+
+  it("auto persists a site rule with transOpen on", async () => {
+    const t = makeTransport(RULE_ACTIVE, SETTING);
+    const result = await setSitePreference(t, {
+      mode: "auto",
+      pattern: "example.com",
+    });
+    expect(result.ok).toBe(true);
+    const bgCall = t.calls.find((c) => c[0] === "bg");
+    expect(bgCall[1]).toBe(MSG_SAVE_RULE);
+    expect(bgCall[2].pattern).toBe("example.com");
+    expect(bgCall[2].transOpen).toBe("true");
+  });
+
+  it("never appends the domain to the blacklist without duplicates", async () => {
+    const t = makeSettingTransport("a.com");
+    const result = await setSitePreference(t, { mode: "never", domain: "b.com" });
+    expect(result.ok).toBe(true);
+    expect(result.value).toEqual({ mode: "never", domain: "b.com", blacklisted: true });
+    expect(t.written().blacklist).toBe("a.com\nb.com");
+
+    const t2 = makeSettingTransport("a.com\nb.com");
+    await setSitePreference(t2, { mode: "never", domain: "b.com" });
+    expect(t2.written().blacklist).toBe("a.com\nb.com");
+  });
+
+  it("clear removes exactly the domain", async () => {
+    const t = makeSettingTransport("a.com\nb.com");
+    const result = await setSitePreference(t, { mode: "clear", domain: "a.com" });
+    expect(result.ok).toBe(true);
+    expect(result.value.blacklisted).toBe(false);
+    expect(t.written().blacklist).toBe("b.com");
+  });
+
+  it("fails clearly when setting accessors are missing", async () => {
+    const t = makeTransport(RULE_ACTIVE, SETTING); // no readSetting/writeSetting
+    expect(
+      (await setSitePreference(t, { mode: "never", domain: "a.com" })).error.code
+    ).toBe("TRANSPORT_UNAVAILABLE");
+  });
+
+  it("validates mode and required fields", async () => {
+    const t = makeTransport(RULE_ACTIVE, SETTING);
+    expect(
+      (await setSitePreference(t, { mode: "nuked", domain: "a.com" })).error.code
+    ).toBe("UNSUPPORTED_INPUT");
+    expect((await setSitePreference(t, { mode: "auto" })).error.code).toBe(
+      "UNSUPPORTED_INPUT"
+    );
+    expect((await setSitePreference(t, { mode: "never" })).error.code).toBe(
+      "UNSUPPORTED_INPUT"
+    );
   });
 });

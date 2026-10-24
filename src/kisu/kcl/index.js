@@ -14,5 +14,11 @@ export {
   normalizePageState,
   readPageState,
   subscribePageState,
+  setPageTranslation,
+  setPageDisplayMode,
+  setPageProvider,
+  setPageTargetLanguage,
+  saveSiteRule,
+  setSitePreference,
 } from "./page";
 export { isMatch, isSiteBlacklisted } from "./sites";
