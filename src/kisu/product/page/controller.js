@@ -5,6 +5,7 @@ import {
   subscribePageState,
   setPageTranslation,
   setPageDisplayMode,
+  setPageTargetLanguage,
 } from "../../kcl";
 
 export const PAGE_VIEW_STATUSES = Object.freeze([
@@ -138,6 +139,23 @@ export const createPageController = ({ sendAction, href = "" } = {}) => {
     return current;
   };
 
+  // 目标语言（MVP-20）：经 KCL PUTRULE 写运行态。语言码合法性由产品层
+  // （product/page/languages.js，OPT_LANGS_TO 唯一事实源）把关；KCL 只做非空校验。
+  // 命令失败保留上一真实视图（错误呈现归 MVP-23）。
+  const runSetTargetLanguage = async (toLang) => {
+    if (!current.can.changeLanguage || disposed) {
+      return current;
+    }
+    const result = await setPageTargetLanguage(sendAction, { toLang });
+    if (disposed) {
+      return current;
+    }
+    if (result.ok) {
+      emit(fromState(result.value));
+    }
+    return current;
+  };
+
   return {
     getView: () => current,
     subscribe: (listener) => {
@@ -154,6 +172,7 @@ export const createPageController = ({ sendAction, href = "" } = {}) => {
       translate: () => runToggle(true),
       stop: () => runToggle(false),
       setDisplayMode: (patch) => runSetDisplayMode(patch),
+      setTargetLanguage: (toLang) => runSetTargetLanguage(toLang),
     },
     dispose: () => {
       disposed = true;

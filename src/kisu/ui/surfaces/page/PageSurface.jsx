@@ -5,8 +5,14 @@ import React from "react";
 import { space } from "../../tokens/tokens";
 import { PrimaryAction } from "./PrimaryAction";
 import { PageDisplayMode } from "./PageDisplayMode";
+import { PageLanguageControl } from "./PageLanguageControl";
 
-export const PageSurface = ({ viewModel, actions }) => (
+export const PageSurface = ({
+  viewModel,
+  actions,
+  languageOptions,
+  languageFallback,
+}) => (
   <div
     data-testid="kisu-page-surface"
     style={{ display: "flex", flexDirection: "column", gap: space.md }}
@@ -22,7 +28,16 @@ export const PageSurface = ({ viewModel, actions }) => (
       viewModel={viewModel}
       onSetDisplayMode={actions.setDisplayMode}
     />
-    {/* slot: 目标语言（MVP-20） */}
+    {/* slot: 目标语言（MVP-20）；options/fallback 由 product 层注入（OPT_LANGS_TO
+        唯一事实源）。未提供时不渲染该 slot——入口组合负责传全量 props。 */}
+    {languageOptions && (
+      <PageLanguageControl
+        viewModel={viewModel}
+        options={languageOptions}
+        fallbackValue={languageFallback}
+        onSetTargetLanguage={actions.setTargetLanguage}
+      />
+    )}
     {/* slot: Provider picker（MVP-21） */}
     {/* slot: 站点策略（MVP-22） */}
     {/* slot: 状态/错误（MVP-23） */}
