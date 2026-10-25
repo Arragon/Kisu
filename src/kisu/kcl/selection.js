@@ -84,11 +84,12 @@ export const setSelectionProviders = async (transport, { apiSlugs } = {}) => {
   return kclOk(Object.freeze({ apiSlugs: Object.freeze([...apiSlugs]) }));
 };
 
-// 翻译执行包装器。runner 收到 { text, fromLang, toLang, apiSetting }；
+// 翻译执行包装器。runner 收到 { text, fromLang, toLang, apiSetting, onChunk? }；
 // apiSetting 由产品层从 setting.transApis 解析（KCL descriptor 不含凭据）。
-// runner 抛错 → PROVIDER_REQUEST_FAILED（归一化，不向产品层泄漏裸异常）。
+// onChunk（可选，流式）：runner 对每个中间块调用 onChunk(partialText)——透传由
+// 调用方定义语义；runner 抛错 → PROVIDER_REQUEST_FAILED（归一化，不向产品层泄漏裸异常）。
 export const translateSelection = async (
-  { text, fromLang, toLang, apiSetting } = {},
+  { text, fromLang, toLang, apiSetting, onChunk } = {},
   { run } = {}
 ) => {
   if (typeof run !== "function") {
@@ -103,8 +104,13 @@ export const translateSelection = async (
   if (toLang !== undefined && (typeof toLang !== "string" || !toLang)) {
     return kclError("UNSUPPORTED_INPUT", "toLang must be a non-empty string when provided");
   }
+  if (onChunk !== undefined && typeof onChunk !== "function") {
+    return kclError("UNSUPPORTED_INPUT", "onChunk must be a function when provided");
+  }
   try {
-    return kclOk(await run({ text, fromLang, toLang, apiSetting }));
+    return kclOk(
+      await run({ text, fromLang, toLang, apiSetting, onChunk })
+    );
   } catch (err) {
     return kclError(
       "PROVIDER_REQUEST_FAILED",

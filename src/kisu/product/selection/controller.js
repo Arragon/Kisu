@@ -147,6 +147,30 @@ export const createSelectionController = ({
     }
     const providers = data.providers;
     const apiSetting = providers.resolved[0] || null;
+    // 流式（MVP-31）：translate 的 runner 可经 onChunk(partial) 推送中间块；
+    // controller 以 loading 视图重发（payload.partial），status 不变——有界呈现
+    // 由 surface 负责（MVP-31 滚动区域）。
+    const onChunk =
+      mode === "translate"
+        ? (partial) => {
+            if (disposed) {
+              return;
+            }
+            emit(
+              readyViewModel({
+                kind: data.text.kind,
+                reason: data.text.reason,
+                text: data.text.raw,
+                providers,
+                result: Object.freeze({
+                  kind: mode,
+                  status: "loading",
+                  payload: Object.freeze({ partial: String(partial) }),
+                }),
+              })
+            );
+          }
+        : undefined;
     // 结果占位（loading）→ KCL 执行 → ready/error 折叠。
     // translation/词典结果本体由 runner 决定（上游 apiTranslate/apiDict 形状），
     // controller 不解释内容，只承载 status。
@@ -162,7 +186,7 @@ export const createSelectionController = ({
     const executor =
       mode === "translate"
         ? translateSelection(
-            { text: data.text.raw, apiSetting },
+            { text: data.text.raw, apiSetting, onChunk },
             { run: runner }
           )
         : lookupSelection({ text: data.text.raw }, { run: runner });
