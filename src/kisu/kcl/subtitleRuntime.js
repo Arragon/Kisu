@@ -14,7 +14,15 @@ export const readSubtitleRuntime = (getStatus) => {
       "readSubtitleRuntime requires the KP-001 accessor to be injected"
     );
   }
-  const snapshot = getStatus();
+  let snapshot;
+  try {
+    snapshot = getStatus();
+  } catch (err) {
+    return kclError(
+      "TRANSPORT_UNAVAILABLE",
+      `subtitle accessor failed: ${err && err.message ? err.message : String(err)}`
+    );
+  }
   if (!snapshot || typeof snapshot !== "object") {
     return kclOk(Object.freeze({ mounted: false }));
   }

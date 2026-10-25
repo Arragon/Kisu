@@ -58,7 +58,11 @@ kclError("PROVIDER_NOT_FOUND", "..."); // { ok: false, value: null, error: { cod
   未初始化返回 null，快照字段为原始值，无写通道
 - `readSubtitleRuntime(getStatus)`：访问器注入（content bootstrap 绑定）；
   未注入 → `TRANSPORT_UNAVAILABLE`；未挂载（null）是合法状态 → `kclOk({mounted:false})`
-- 设置层读取（enabled/mode/provider/lang/capability）属 `subtitles.js`（MVP-10）
+- 设置层读取（MVP-10）由 `subtitles.js` 的 `normalizeSubtitleState(setting, {getStatus})`
+  提供：enabled、显示模式（`isBilingual × displayOrder` 组合，**不发明枚举**）、
+  provider（含 registered 标记）、目标语言、AI 断句/上下文 capability
+  （absent / unregistered / incompatible / supported 四态；上游对 segSlug 不做的
+  硬校验由 KCL 补上）与 runtime 状态；回退默认取 `DEFAULT_SUBTITLE_SETTING`
 
 ## Page 写命令 transport（MVP-07）
 
