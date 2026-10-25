@@ -8,6 +8,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { createSubtitleController } from "../../product/subtitles/controller";
 import { SubtitleControl } from "../../ui/surfaces/subtitles/SubtitleControl";
+import { SubtitleModeControl } from "../../ui/surfaces/subtitles/SubtitleModeControl";
 import { ModeProvider } from "../../ui/primitives";
 
 export const mountSubtitleControl = ({
@@ -36,7 +37,13 @@ export const mountSubtitleControl = ({
   const renderView = (view) => {
     root.render(
       <ModeProvider mode={mode}>
-        <SubtitleControl viewModel={view} actions={controller.actions} />
+        <SubtitleControl viewModel={view} actions={controller.actions}>
+          {/* MVP-40 slot：显示模式（后续卡逐个填充 MVP-41..44） */}
+          <SubtitleModeControl
+            viewModel={view}
+            onSetDisplayMode={controller.actions.setDisplayMode}
+          />
+        </SubtitleControl>
       </ModeProvider>
     );
   };
