@@ -10,6 +10,7 @@ import {
   IconButton,
   InlineStatus,
 } from "../../primitives";
+import { describeError } from "../errorHints";
 import { space, type } from "../../tokens/tokens";
 
 // 典型扩展 Popup 宽度（与上游 Popup 同宽）。视觉值允许存在于 surface 层；
@@ -78,9 +79,7 @@ const ShellFrame = ({ title, viewModel, onClose, children }) => {
         </div>
       )}
       {status === "error" && viewModel.error && (
-        <InlineStatus tone="error">
-          {`${viewModel.error.code}: ${viewModel.error.message}`}
-        </InlineStatus>
+        <InlineStatus tone="error">{describeError(viewModel.error)}</InlineStatus>
       )}
       {(status === "idle" || status === "active") && children}
     </div>

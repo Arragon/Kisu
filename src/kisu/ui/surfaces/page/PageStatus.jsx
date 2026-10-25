@@ -4,17 +4,8 @@
 // 上游无独立 "user stopped" 状态，页面状态只有 rule.transOpen，不发明语义）。
 import React from "react";
 import { InlineStatus, useColorPalette } from "../../primitives";
+import { describeError } from "../errorHints";
 import { space, type } from "../../tokens/tokens";
-
-// 归一化错误码 → 可行动信息（KCL 错误码单一来源：kcl/result.js）
-const ERROR_HINTS = {
-  TRANSPORT_UNAVAILABLE:
-    "Cannot reach the page. Reopen the popup or refresh the page.",
-  PROVIDER_NOT_FOUND: "The selected service is gone — pick another below.",
-  PROVIDER_REQUEST_FAILED:
-    "The service request failed (credentials, rate limit or network). Check the service or try again.",
-  UNSUPPORTED_INPUT: "This action is not available here.",
-};
 
 const BLOCK_HINTS = {
   site: "Translation is disabled for this site — use Reset below to re-enable.",
@@ -31,11 +22,8 @@ export const PageStatus = ({ viewModel }) => {
   let text = null;
   if (viewModel.error) {
     tone = "error";
-    const hint = ERROR_HINTS[viewModel.error.code];
-    // code + message 均来自归一化契约；不渲染任何调用栈形状的内容
-    text = hint
-      ? `${hint}${viewModel.error.message ? ` (${viewModel.error.message})` : ""}`
-      : `${viewModel.error.code}: ${viewModel.error.message}`;
+    // describeError 来自归一化契约（code+message，无 stack），未知码 verbatim
+    text = describeError(viewModel.error);
   } else if (viewModel.blockedBy) {
     tone = "warning";
     text = BLOCK_HINTS[viewModel.blockedBy] || `Blocked (${viewModel.blockedBy}).`;
