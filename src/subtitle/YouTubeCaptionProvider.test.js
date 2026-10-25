@@ -1,6 +1,10 @@
 import { act } from "react";
 import { apiSubtitle, apiSummarizeContext } from "../apis/index.js";
-import { YouTubeCaptionProvider } from "./YouTubeCaptionProvider.js";
+import {
+  YouTubeCaptionProvider,
+  YouTubeInitializer,
+  getYouTubeCaptionStatus,
+} from "./YouTubeCaptionProvider.js";
 import { getCaptionTracks, getSubtitleEvents } from "./youtubeCaptionTracks.js";
 import { eventsToSubtitles } from "./youtubeAiSegmentation.js";
 import { prepareTimedTextEvents } from "./youtubeSubtitleProcessing.js";
@@ -159,5 +163,71 @@ describe("YouTubeCaptionProvider manual translation", () => {
 
     expect(mockManagerSettings).toHaveLength(2);
     expect(mockManagerSettings[1].positionRatio).toBe(0.3);
+  });
+});
+
+describe("KP-001 status snapshot accessor (Kisu carried patch)", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockManagerSettings.length = 0;
+    window.history.replaceState({}, "", "/watch?v=snap-1");
+    document.body.innerHTML =
+      '<video></video><button class="captions" aria-pressed="true"></button>';
+  });
+
+  test("getStatusSnapshot returns a frozen read-only runtime snapshot", () => {
+    const provider = new YouTubeCaptionProvider({
+      autoTranslate: false,
+      apiSlug: "mock-api",
+      toLang: "zh-CN",
+      showList: "off",
+    });
+    const snapshot = provider.getStatusSnapshot();
+    expect(Object.isFrozen(snapshot)).toBe(true);
+    expect(snapshot).toEqual({
+      videoId: "snap-1",
+      mounted: false,
+      autoTranslate: false,
+      progressed: 0,
+      processing: false,
+      activeTrackKey: null,
+      fromLang: "auto",
+    });
+  });
+
+  test("exported accessor is null before initialization and live after mount", async () => {
+    expect(getYouTubeCaptionStatus()).toBeNull();
+
+    await YouTubeInitializer({
+      autoTranslate: true,
+      apiSlug: "mock-api",
+      toLang: "zh-CN",
+      showList: "off",
+    });
+
+    const snapshot = getYouTubeCaptionStatus();
+    expect(snapshot).not.toBeNull();
+    expect(Object.isFrozen(snapshot)).toBe(true);
+    expect(snapshot.videoId).toBe("snap-1");
+    expect(snapshot.autoTranslate).toBe(true);
+    expect(snapshot.mounted).toBe(false);
+  });
+
+  test("snapshot reflects SPA navigation without a stale or null instance", async () => {
+    await YouTubeInitializer({
+      autoTranslate: true,
+      apiSlug: "mock-api",
+      toLang: "zh-CN",
+      showList: "off",
+    });
+
+    window.history.replaceState({}, "", "/watch?v=snap-2");
+    window.dispatchEvent(new Event("yt-navigate-finish"));
+
+    const snapshot = getYouTubeCaptionStatus();
+    expect(snapshot).not.toBeNull();
+    expect(snapshot.videoId).toBe("snap-2");
+    expect(snapshot.progressed).toBe(0);
+    expect(snapshot.autoTranslate).toBe(true); // 回落 #defaultAutoTranslate
   });
 });

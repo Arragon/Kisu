@@ -51,6 +51,15 @@ kclError("PROVIDER_NOT_FOUND", "..."); // { ok: false, value: null, error: { cod
   ——其依赖链含 Jest 27 无法加载的 `@streamparser/json` ESM（BL-04）
 - 词条/句子/长文本分类边界（ADR-015）在 MVP-27（INH-1168）重建时定稿
 
+## Subtitle 运行时（KP-001）
+
+- TRACK 补丁 KP-001（ADR-011，见 `docs/upstream/carried-patches.md`）在
+  `YouTubeCaptionProvider` 上暴露只读冻结快照：`getYouTubeCaptionStatus()`
+  未初始化返回 null，快照字段为原始值，无写通道
+- `readSubtitleRuntime(getStatus)`：访问器注入（content bootstrap 绑定）；
+  未注入 → `TRANSPORT_UNAVAILABLE`；未挂载（null）是合法状态 → `kclOk({mounted:false})`
+- 设置层读取（enabled/mode/provider/lang/capability）属 `subtitles.js`（MVP-10）
+
 ## Page 写命令 transport（MVP-07）
 
 命令接受 transport：`{ sendTab(action, args?), sendBg(action, args)?,

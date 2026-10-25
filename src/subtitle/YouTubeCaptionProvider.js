@@ -1012,7 +1012,32 @@ export class YouTubeCaptionProvider {
       this.#subtitleListManager = null;
     }
   }
+
+  /**
+   * 返回当前字幕运行状态的只读快照。
+   * KP-001（Kisu carried patch，ADR-011）：闭包单例导致外部完全无法读取字幕状态；
+   * 本方法只暴露冻结的原始值快照，不交出实例或任何可变引用，也不提供写通道。
+   *
+   * @public
+   * @returns {Readonly<{videoId: string|null, mounted: boolean, autoTranslate: boolean,
+   *   progressed: number, processing: boolean, activeTrackKey: string|null, fromLang: string}>}
+   *   冻结的状态快照。
+   */
+  getStatusSnapshot() {
+    return Object.freeze({
+      videoId: this.#videoId,
+      mounted: this.#managerInstance !== null,
+      autoTranslate: this.#setting.autoTranslate === true,
+      progressed: this.#progressed,
+      processing: this.#processingId !== null,
+      activeTrackKey: this.#activeTrackKey,
+      fromLang: this.#fromLang,
+    });
+  }
 }
+
+// KP-001（Kisu carried patch，ADR-011）：保存单例实例引用，供只读快照访问器使用。
+let captionProviderInstance = null;
 
 /**
  * YouTube 字幕模块的单例初始化入口。
@@ -1031,7 +1056,17 @@ export const YouTubeInitializer = (() => {
     initialized = true;
 
     logger.info("Bilingual Subtitle Extension: Initializing...");
-    const provider = new YouTubeCaptionProvider(setting);
-    provider.initialize();
+    captionProviderInstance = new YouTubeCaptionProvider(setting);
+    captionProviderInstance.initialize();
   };
 })();
+
+/**
+ * 只读获取当前字幕运行状态快照（KP-001 / Kisu carried patch，ADR-011）。
+ * 模块尚未初始化（非视频页/字幕未启用/重复初始化被拦截前）返回 null；
+ * 仅返回冻结快照，不暴露实例本身。
+ *
+ * @returns {Readonly<object>|null}
+ */
+export const getYouTubeCaptionStatus = () =>
+  captionProviderInstance ? captionProviderInstance.getStatusSnapshot() : null;
