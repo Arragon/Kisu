@@ -1,7 +1,11 @@
 // Page feature controller（MVP-15 首例 / INH-1156）。
 // 约定见 src/kisu/ui/contracts/view-model.md：纯 JS、无 React/DOM；
 // 订阅 KCL（ADR-014 pull-only 轮询）折叠冻结 view-model；动作先查 can。
-import { subscribePageState, setPageTranslation } from "../../kcl";
+import {
+  subscribePageState,
+  setPageTranslation,
+  setPageDisplayMode,
+} from "../../kcl";
 
 export const PAGE_VIEW_STATUSES = Object.freeze([
   "loading",
@@ -117,6 +121,23 @@ export const createPageController = ({ sendAction, href = "" } = {}) => {
     return current;
   };
 
+  // 显示模式（MVP-19）：经 KCL PUTRULE 写运行态（页面存活期间 GETRULE 回读得到，
+  // 即"重开 Popup 保持"的语义来源）。命令失败保留上一个真实视图——
+  // 错误的统一呈现归 MVP-23。
+  const runSetDisplayMode = async (patch) => {
+    if (!current.can.changeDisplayMode || disposed) {
+      return current;
+    }
+    const result = await setPageDisplayMode(sendAction, patch);
+    if (disposed) {
+      return current;
+    }
+    if (result.ok) {
+      emit(fromState(result.value));
+    }
+    return current;
+  };
+
   return {
     getView: () => current,
     subscribe: (listener) => {
@@ -132,6 +153,7 @@ export const createPageController = ({ sendAction, href = "" } = {}) => {
     actions: {
       translate: () => runToggle(true),
       stop: () => runToggle(false),
+      setDisplayMode: (patch) => runSetDisplayMode(patch),
     },
     dispose: () => {
       disposed = true;
