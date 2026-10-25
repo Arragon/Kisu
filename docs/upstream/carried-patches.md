@@ -194,4 +194,19 @@ Outcome: KP-001 implemented as the narrowed read-only accessor (getStatusSnapsho
   tests in its test file). Original ADR-011 approval evidenced by the INH-1228
   design comment; text re-derived in docs/architecture/decisions.md.
   KP-002/KP-003/KP-004 remain proposed (D3/D4 decisions still open for 002/004).
+
+Date: 2026-10-25 (second pass, MVP-46 divergence audit / INH-1187)
+Baseline: v2.0.32 (7dfc03eb) + EU-001..004 on next@m0-start (6037227)
+Patches reviewed: KP-001 (active, revalidated), KP-002/KP-003/KP-004 (proposed, unchanged)
+Outcome: evidence-based diff of the whole subtitle-domain TRACK surface vs m0-start:
+  src/subtitle/YouTubeCaptionProvider.js +39/-3 and its test +72 — exactly the KP-001
+  hunks (getStatusSnapshot + getYouTubeCaptionStatus + snapshot tests); no other
+  TRACK change in src/subtitle/*, src/injectors/*, injector-subtitle.js.
+  Zero algorithm copying: no src/kisu file imports src/subtitle/* or segmentation/
+  queue internals (subtitleRuntime.js grep hit is comment text only); segmentation,
+  translation queue and rendering are REUSE via the KP-001 read-only snapshot +
+  upstream execution paths. KCL subtitle semantics: read-only snapshot (KP-001) +
+  next-load commands (PRs #9/#10) — no real-time channel, live switching deferred
+  to KP-002 + D3. Verdict: divergence confined to KP-001 as registered; no
+  unregistered TRACK modification; audit PASS.
 ```
