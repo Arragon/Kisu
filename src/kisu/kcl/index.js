@@ -30,3 +30,7 @@ export {
   lookupSelection,
 } from "./selection";
 export { readSubtitleRuntime } from "./subtitleRuntime";
+export {
+  SUBTITLE_DISPLAY_ORDERS,
+  normalizeSubtitleState,
+} from "./subtitles";
