@@ -89,7 +89,8 @@ describe("PopupShell state slots (MVP-16)", () => {
       </PopupShell>
     );
     const status = container.querySelector('[role="status"]');
-    expect(status.textContent).toContain("TRANSPORT_UNAVAILABLE");
+    // 经共享 errorHints 呈现可行动文案（含归一化 message，无 stack）
+    expect(status.textContent).toContain("Reopen the popup or refresh");
     expect(status.textContent).toContain("no page rule");
     expect(container.textContent).not.toContain("never");
     unmount();
@@ -153,7 +154,7 @@ describe("PopupShell chrome (MVP-16)", () => {
 });
 
 describe("PopupShell dependency boundary (MVP-16)", () => {
-  it("imports only react, primitives and tokens — never KCL or product code", () => {
+  it("imports only react, primitives, tokens and surfaces-internal helpers — never KCL or product code", () => {
     const source = fs.readFileSync(
       path.resolve(__dirname, "..", "PopupShell.jsx"),
       "utf8"
@@ -161,7 +162,11 @@ describe("PopupShell dependency boundary (MVP-16)", () => {
     const imports = source.match(/from "([^"]+)"/g) || [];
     expect(imports.length).toBeGreaterThan(0);
     imports.forEach((entry) => {
-      expect(entry === 'from "react"' || /^from "\.\.\/\.\.\/(primitives|tokens)/.test(entry)).toBe(true);
+      const allowed =
+        entry === 'from "react"' ||
+        /^from "\.\.\/\.\.\/(primitives|tokens)/.test(entry) ||
+        entry === 'from "../errorHints"'; // surfaces 层内部共享模块
+      expect(allowed).toBe(true);
     });
   });
 });
