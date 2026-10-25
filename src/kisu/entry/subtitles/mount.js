@@ -11,6 +11,7 @@ import { SubtitleControl } from "../../ui/surfaces/subtitles/SubtitleControl";
 import { SubtitleModeControl } from "../../ui/surfaces/subtitles/SubtitleModeControl";
 import { SubtitleProviderPicker } from "../../ui/surfaces/subtitles/SubtitleProviderPicker";
 import { SubtitleLanguageControl } from "../../ui/surfaces/subtitles/SubtitleLanguageControl";
+import { SubtitleContextControl } from "../../ui/surfaces/subtitles/SubtitleContextControl";
 import { ModeProvider } from "../../ui/primitives";
 import {
   getSubtitleLanguageOptions,
@@ -60,6 +61,11 @@ export const mountSubtitleControl = ({
             options={getSubtitleLanguageOptions()}
             fallbackValue={getSubtitleLanguageFallback()}
             onSetTargetLanguage={controller.actions.setTargetLanguage}
+          />
+          {/* MVP-43 slot：Context 模式（capability 四态门控） */}
+          <SubtitleContextControl
+            viewModel={view}
+            onSetContextMode={controller.actions.setContextMode}
           />
         </SubtitleControl>
       </ModeProvider>
