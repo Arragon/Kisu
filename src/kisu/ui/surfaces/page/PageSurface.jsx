@@ -4,6 +4,7 @@
 import React from "react";
 import { space } from "../../tokens/tokens";
 import { PrimaryAction } from "./PrimaryAction";
+import { PageDisplayMode } from "./PageDisplayMode";
 
 export const PageSurface = ({ viewModel, actions }) => (
   <div
@@ -17,6 +18,10 @@ export const PageSurface = ({ viewModel, actions }) => (
       onStop={actions.stop}
     />
     {/* slot: 显示模式（MVP-19） */}
+    <PageDisplayMode
+      viewModel={viewModel}
+      onSetDisplayMode={actions.setDisplayMode}
+    />
     {/* slot: 目标语言（MVP-20） */}
     {/* slot: Provider picker（MVP-21） */}
     {/* slot: 站点策略（MVP-22） */}
