@@ -1,0 +1,62 @@
+// 字幕控制挂载入口（MVP-39 / INH-1180）——entry 层：装配 product controller 与
+// ui surface 的宿主胶水。独立成层的原因：product 层禁 import ui（P2-T05 gate）、
+// surface 层禁 import product（层内隔离），装配只能发生在边界之上。
+// 并行挂载契约（youtube-lifecycle.md §3/§4）：只向调用方提供的 host 追加自有
+// 容器，不改写上游按钮/菜单；subtitle disabled 时照常挂载；SPA 清理 = destroy()
+// 一次性完成退订 + unmount + 控制器 dispose（停轮询定时器）。
+import React from "react";
+import { createRoot } from "react-dom/client";
+import { createSubtitleController } from "../../product/subtitles/controller";
+import { SubtitleControl } from "../../ui/surfaces/subtitles/SubtitleControl";
+import { ModeProvider } from "../../ui/primitives";
+
+export const mountSubtitleControl = ({
+  getSetting,
+  getStatus,
+  writeSetting,
+  host,
+  mode = "dark",
+  intervalMs,
+  shouldPoll,
+} = {}) => {
+  if (!host || typeof host.appendChild !== "function") {
+    throw new TypeError("mountSubtitleControl requires a host element");
+  }
+  const controller = createSubtitleController({
+    getSetting,
+    getStatus,
+    writeSetting,
+    intervalMs,
+    shouldPoll,
+  });
+  const frame = document.createElement("div");
+  frame.setAttribute("data-kisu-subtitle-control", "");
+  host.appendChild(frame);
+  const root = createRoot(frame);
+  const renderView = (view) => {
+    root.render(
+      <ModeProvider mode={mode}>
+        <SubtitleControl viewModel={view} actions={controller.actions} />
+      </ModeProvider>
+    );
+  };
+  const unsubscribe = controller.subscribe(renderView); // 立即回放当前视图
+  let destroyed = false;
+
+  return {
+    element: frame,
+    controller,
+    destroy: () => {
+      if (destroyed) {
+        return;
+      }
+      destroyed = true;
+      unsubscribe();
+      root.unmount();
+      if (frame.parentNode) {
+        frame.parentNode.removeChild(frame);
+      }
+      controller.dispose(); // 停轮询定时器
+    },
+  };
+};
