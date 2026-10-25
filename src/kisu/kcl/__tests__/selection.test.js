@@ -130,6 +130,32 @@ describe("translateSelection (MVP-09)", () => {
     expect(result.error.message).toContain("rate limited");
   });
 
+  it("passes an optional onChunk through to the runner", async () => {
+    const seen = [];
+    await translateSelection(
+      { text: "hi", onChunk: (partial) => seen.push(partial) },
+      {
+        run: async ({ onChunk }) => {
+          onChunk("你");
+          onChunk("你好");
+          return { output: "你好" };
+        },
+      }
+    );
+    expect(seen).toEqual(["你", "你好"]);
+  });
+
+  it("validates onChunk type", async () => {
+    expect(
+      (
+        await translateSelection(
+          { text: "hi", onChunk: "nope" },
+          { run: async () => ({}) }
+        )
+      ).error.code
+    ).toBe("UNSUPPORTED_INPUT");
+  });
+
   it("validates text, languages and runner", async () => {
     expect((await translateSelection({ text: "hi" }, {})).error.code).toBe(
       "UNSUPPORTED_INPUT"

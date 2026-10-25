@@ -221,6 +221,40 @@ describe("selection controller contract (MVP-28)", () => {
     controller.dispose();
   });
 
+  it("streaming: onChunk emits loading updates without changing status, then ready folds", async () => {
+    let sendChunk;
+    let finish;
+    const { controller, views } = makeController({
+      runTranslate: ({ onChunk }) =>
+        new Promise((resolve) => {
+          sendChunk = (text) => onChunk(text);
+          finish = () => resolve({ output: "完整译文" });
+        }),
+    });
+    const opened = controller.open("hello world");
+    await flushPromises();
+    sendChunk("你好");
+    await flushPromises();
+    sendChunk("你好，世界");
+    await flushPromises();
+    const streaming = last(views);
+    expect(streaming.status).toBe("loading");
+    expect(streaming.data.result.payload).toEqual({ partial: "你好，世界" });
+    expect(streaming.can.translate).toBe(false); // 流式期间不可重入
+
+    finish();
+    await opened;
+    await flushPromises();
+    const ready = last(views);
+    expect(ready.status).toBe("ready");
+    expect(ready.data.result).toEqual({
+      kind: "translate",
+      status: "ready",
+      payload: { output: "完整译文" },
+    });
+    controller.dispose();
+  });
+
   it("setProviders without a storage transport fails clearly", async () => {
     const { controller } = makeController();
     await controller.open("hello world");
