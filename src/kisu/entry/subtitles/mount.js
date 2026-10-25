@@ -9,6 +9,7 @@ import { createRoot } from "react-dom/client";
 import { createSubtitleController } from "../../product/subtitles/controller";
 import { SubtitleControl } from "../../ui/surfaces/subtitles/SubtitleControl";
 import { SubtitleModeControl } from "../../ui/surfaces/subtitles/SubtitleModeControl";
+import { SubtitleProviderPicker } from "../../ui/surfaces/subtitles/SubtitleProviderPicker";
 import { ModeProvider } from "../../ui/primitives";
 
 export const mountSubtitleControl = ({
@@ -42,6 +43,11 @@ export const mountSubtitleControl = ({
           <SubtitleModeControl
             viewModel={view}
             onSetDisplayMode={controller.actions.setDisplayMode}
+          />
+          {/* MVP-41 slot：字幕服务 */}
+          <SubtitleProviderPicker
+            viewModel={view}
+            onSetProvider={controller.actions.setProvider}
           />
         </SubtitleControl>
       </ModeProvider>

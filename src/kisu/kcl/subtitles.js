@@ -94,6 +94,8 @@ export const normalizeSubtitleState = (setting, { getStatus } = {}) => {
         apiSlug,
         registered: apis.some((p) => p.apiSlug === apiSlug),
       }),
+      // Provider 注册表投影（MVP-41）：白名单 descriptor 随状态下行（Page 同款，PR #20）
+      providers: apis,
       targetLanguage: asString(sub.toLang) || D.toLang,
       autoTranslate:
         typeof sub.autoTranslate === "boolean"
