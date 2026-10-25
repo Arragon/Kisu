@@ -530,7 +530,12 @@ describe("setSitePreference (MVP-07)", () => {
     const t = makeSettingTransport("a.com");
     const result = await setSitePreference(t, { mode: "never", domain: "b.com" });
     expect(result.ok).toBe(true);
-    expect(result.value).toEqual({ mode: "never", domain: "b.com", blacklisted: true });
+    expect(result.value).toEqual({
+      mode: "never",
+      domain: "b.com",
+      blacklisted: true,
+      ruleRemoved: false,
+    });
     expect(t.written().blacklist).toBe("a.com\nb.com");
 
     const t2 = makeSettingTransport("a.com\nb.com");

@@ -354,10 +354,13 @@ export const saveSiteRule = async (transport, { pattern, patch } = {}) => {
 };
 
 // 站点策略：auto = 持久化站点规则并自动开翻译；never = 加入黑名单；
-// clear = 从黑名单移除。黑名单存于 setting（无消息通道），需注入
-// readSetting/writeSetting，缺失时明确失败而非静默假成功。
-// 与上游 handleAddToBlacklist 的差异：对完全相同的条目去重，避免重复 never
-// 产生冗余行（上游会重复追加）。
+// clear = 从黑名单移除，并在提供 rules 读写器时一并移除该域名的持久化站点规则。
+// 黑名单存于 setting（无消息通道），需注入 readSetting/writeSetting；缺失时明确
+// 失败而非静默假成功。
+// 与上游的差异（均已注明）：never 对完全相同条目去重（上游会重复追加）；
+// clear 的规则移除复刻上游 Options 的 del(pattern)（hooks/Rules.js:44，精确
+// pattern 匹配、'*' 受保护）——上游 Popup 没有规则移除通道，此能力只在
+// Options 直连存储路径存在（S8 证据核实结论）。
 export const setSitePreference = async (
   transport,
   { mode, pattern, domain } = {}
@@ -415,11 +418,50 @@ export const setSitePreference = async (
       `writeSetting failed: ${err && err.message ? err.message : String(err)}`
     );
   }
+
+  // clear 的完整形态：同时移除精确匹配 domain 的持久化站点规则（上游 del 语义）。
+  // rules 读写器未注入时跳过（黑名单清除仍生效），在结果中明示。
+  let ruleRemoved = false;
+  if (
+    mode === "clear" &&
+    typeof t.readRules === "function" &&
+    typeof t.writeRules === "function"
+  ) {
+    let rules;
+    try {
+      rules = await t.readRules();
+    } catch (err) {
+      return transportError(
+        `readRules failed: ${err && err.message ? err.message : String(err)}`
+      );
+    }
+    const list = Array.isArray(rules) ? rules : [];
+    if (
+      list.some(
+        (item) => item && item.pattern === domain && item.pattern !== GLOBAL_KEY
+      )
+    ) {
+      try {
+        await t.writeRules((prev) =>
+          (Array.isArray(prev) ? prev : []).filter(
+            (item) => item && item.pattern !== domain
+          )
+        );
+        ruleRemoved = true;
+      } catch (err) {
+        return transportError(
+          `writeRules failed: ${err && err.message ? err.message : String(err)}`
+        );
+      }
+    }
+  }
+
   return kclOk(
     Object.freeze({
       mode,
       domain,
       blacklisted: mode === "never",
+      ruleRemoved,
     })
   );
 };

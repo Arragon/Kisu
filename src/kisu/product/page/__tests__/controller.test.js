@@ -59,6 +59,7 @@ describe("page controller view-model contract (MVP-15)", () => {
       changeDisplayMode: false,
       changeLanguage: false,
       changeProvider: false,
+      changeSitePreference: false,
     });
     expect(Object.isFrozen(first)).toBe(true);
     expect(Object.isFrozen(first.can)).toBe(true);

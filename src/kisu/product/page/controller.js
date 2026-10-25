@@ -7,6 +7,8 @@ import {
   setPageDisplayMode,
   setPageTargetLanguage,
   setPageProvider,
+  setSitePreference,
+  readPageState,
 } from "../../kcl";
 
 export const PAGE_VIEW_STATUSES = Object.freeze([
@@ -22,6 +24,7 @@ const ACTION_KEYS = Object.freeze([
   "changeDisplayMode",
   "changeLanguage",
   "changeProvider",
+  "changeSitePreference",
 ]);
 
 const frozenCan = (flags) => {
@@ -78,13 +81,19 @@ const fromState = (state) => {
       changeLanguage: blockedBy === null,
       // provider 失效时换一个有效 provider 正是恢复路径——保持可用
       changeProvider: blockedBy !== "site",
+      // 站点策略是逃生舱：即使在黑名单站点上也保持可用（clear 即恢复路径）
+      changeSitePreference: true,
     }),
     blockedBy,
     error: null,
   });
 };
 
-export const createPageController = ({ sendAction, href = "" } = {}) => {
+export const createPageController = ({
+  sendAction,
+  href = "",
+  siteAccessors,
+} = {}) => {
   if (typeof sendAction !== "function") {
     throw new TypeError("createPageController requires a sendAction(message) transport");
   }
@@ -175,6 +184,31 @@ export const createPageController = ({ sendAction, href = "" } = {}) => {
     return current;
   };
 
+  // 站点策略（MVP-22）：KCL setSitePreference（auto/never/clear）。
+  // 黑名单/站点规则存于 popup 侧存储（无消息通道），入口组合须提供 siteAccessors
+  // { readSetting, writeSetting, readRules?, writeRules? }。变更后立即重读页面
+  // 状态折叠视图（黑名单变化会反映在 data.site / blockedBy / can 上）；
+  // KCL 失败保留上一真实视图（错误呈现归 MVP-23）。
+  const runSetSitePreference = async (request) => {
+    if (!current.can.changeSitePreference || disposed) {
+      return current;
+    }
+    const result = await setSitePreference(
+      { sendTab: sendAction, ...(siteAccessors || {}) },
+      request
+    );
+    if (disposed) {
+      return current;
+    }
+    if (result.ok) {
+      const refreshed = await readPageState(sendAction, href);
+      if (!disposed && refreshed.ok) {
+        emit(fromState(refreshed.value));
+      }
+    }
+    return current;
+  };
+
   return {
     getView: () => current,
     subscribe: (listener) => {
@@ -193,6 +227,7 @@ export const createPageController = ({ sendAction, href = "" } = {}) => {
       setDisplayMode: (patch) => runSetDisplayMode(patch),
       setTargetLanguage: (toLang) => runSetTargetLanguage(toLang),
       setProvider: (apiSlug) => runSetProvider(apiSlug),
+      setSitePreference: (request) => runSetSitePreference(request),
     },
     dispose: () => {
       disposed = true;
