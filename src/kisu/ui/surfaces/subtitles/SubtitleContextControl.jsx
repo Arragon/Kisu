@@ -17,7 +17,10 @@ export const SubtitleContextControl = ({ viewModel, onSetContextMode }) => {
   }
   const { context, providers } = viewModel.data;
   const supported = context.capability.supported === true;
-  const disabled = !viewModel.can.changeContext || !supported;
+  // 门控语义（MVP-43 修正，MVP-51 设置面要求可配置）：absent（"-"）可交互——
+  // 配置它正是本控件的目的；broken（slug 已设但未注册/不兼容）才禁用并呈现原因。
+  const broken = !supported && context.slug !== OFF;
+  const disabled = !viewModel.can.changeContext || broken;
   const aiOptions = providers
     .filter((p) => p.usable && p.capabilities.ai === true)
     .map((p) => ({ value: p.apiSlug, label: p.name }));
@@ -51,7 +54,10 @@ export const SubtitleContextControl = ({ viewModel, onSetContextMode }) => {
         }}
       />
       {!supported && (
-        <InlineStatus tone="info" data-testid="kisu-subtitle-context-reason">
+        <InlineStatus
+          tone={broken ? "warning" : "info"}
+          data-testid="kisu-subtitle-context-reason"
+        >
           {context.capability.reason || "Not available"}
         </InlineStatus>
       )}
