@@ -61,6 +61,7 @@ const fromState = (state) =>
       enabled: state.enabled,
       displayMode: state.displayMode,
       provider: state.provider,
+      providers: state.providers,
       targetLanguage: state.targetLanguage,
       autoTranslate: state.autoTranslate,
       segmentation: state.segmentation,
