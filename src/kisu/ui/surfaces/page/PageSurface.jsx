@@ -8,6 +8,7 @@ import { PageDisplayMode } from "./PageDisplayMode";
 import { PageLanguageControl } from "./PageLanguageControl";
 import { PageProviderPicker } from "./PageProviderPicker";
 import { SitePreferenceAction } from "./SitePreferenceAction";
+import { PageStatus } from "./PageStatus";
 
 export const PageSurface = ({
   viewModel,
@@ -55,6 +56,7 @@ export const PageSurface = ({
       pattern={sitePattern}
       onSetSitePreference={actions.setSitePreference}
     />
-    {/* slot: 状态/错误（MVP-23） */}
+    {/* slot: 状态/错误（MVP-23）——Page 错误呈现统一归宿 */}
+    <PageStatus viewModel={viewModel} />
   </div>
 );
