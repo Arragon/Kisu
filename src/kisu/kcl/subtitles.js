@@ -111,3 +111,200 @@ export const normalizeSubtitleState = (setting, { getStatus } = {}) => {
     })
   );
 };
+
+// ---------------------------------------------------------------------------
+// 写命令（MVP-11 / INH-1152）——D3 的 M0 回退语义：next-load。
+//
+// 所有命令只经注入的 setting 读写器持久化 `subtitleSetting`，下次字幕系统启动
+// （新视频/页面刷新）生效；M0 不做实时切换——上游 `updateSetting` 的实时通道
+// （isBilingual/displayOrder/segSlug/aiContextSlug/autoTranslate 六字段）不向 KCL
+// 开放（KP-001 只读），实时化需 KP-002 扩展，留待 D3 正式拍板。产品层 UI 必须
+// 向用户明示"下次加载生效"。
+// 每条命令写后重读 setting 并返回归一化投影，验证真实持久状态而非乐观值。
+
+const asTransport = (transport) =>
+  transport &&
+  typeof transport === "object" &&
+  typeof transport.readSetting === "function" &&
+  typeof transport.writeSetting === "function"
+    ? transport
+    : null;
+
+const transportError = (detail) => kclError("TRANSPORT_UNAVAILABLE", detail);
+
+const persistSubtitlePatch = async (transport, patch) => {
+  const t = asTransport(transport);
+  if (!t) {
+    return transportError(
+      "subtitle commands require transport.readSetting/writeSetting"
+    );
+  }
+  let setting;
+  try {
+    setting = await t.readSetting();
+  } catch (err) {
+    return transportError(
+      `readSetting failed: ${err && err.message ? err.message : String(err)}`
+    );
+  }
+  try {
+    await t.writeSetting((pre) => ({
+      ...pre,
+      subtitleSetting: {
+        ...(pre && pre.subtitleSetting ? pre.subtitleSetting : {}),
+        ...patch,
+      },
+    }));
+  } catch (err) {
+    return transportError(
+      `writeSetting failed: ${err && err.message ? err.message : String(err)}`
+    );
+  }
+  let next;
+  try {
+    next = await t.readSetting();
+  } catch (err) {
+    return transportError(
+      `readSetting (verify) failed: ${err && err.message ? err.message : String(err)}`
+    );
+  }
+  return normalizeSubtitleState(next);
+};
+
+// 启用/停用字幕翻译（持久化，next-load 生效）。
+export const setSubtitleEnabled = (transport, { enabled } = {}) => {
+  if (typeof enabled !== "boolean") {
+    return Promise.resolve(
+      kclError("UNSUPPORTED_INPUT", "setSubtitleEnabled requires { enabled: boolean }")
+    );
+  }
+  return persistSubtitlePatch(transport, { enabled });
+};
+
+// 设置显示模式（isBilingual × displayOrder，持久化，next-load 生效）。
+export const setSubtitleDisplayMode = (
+  transport,
+  { bilingual, order } = {}
+) => {
+  if (bilingual === undefined && order === undefined) {
+    return Promise.resolve(
+      kclError(
+        "UNSUPPORTED_INPUT",
+        "setSubtitleDisplayMode requires bilingual and/or order"
+      )
+    );
+  }
+  if (bilingual !== undefined && typeof bilingual !== "boolean") {
+    return Promise.resolve(
+      kclError("UNSUPPORTED_INPUT", "bilingual must be boolean")
+    );
+  }
+  if (order !== undefined && !SUBTITLE_DISPLAY_ORDERS.includes(order)) {
+    return Promise.resolve(
+      kclError(
+        "UNSUPPORTED_INPUT",
+        `order must be one of ${SUBTITLE_DISPLAY_ORDERS.join(", ")}`
+      )
+    );
+  }
+  const patch = {};
+  if (bilingual !== undefined) {
+    patch.isBilingual = bilingual;
+  }
+  if (order !== undefined) {
+    patch.displayOrder = order;
+  }
+  return persistSubtitlePatch(transport, patch);
+};
+
+// 设置字幕 Provider（持久化，next-load 生效）。经 transApis 注册表校验，
+// 未知引用整批拒绝。
+export const setSubtitleProvider = async (transport, { apiSlug } = {}) => {
+  if (typeof apiSlug !== "string" || !apiSlug) {
+    return kclError(
+      "UNSUPPORTED_INPUT",
+      "setSubtitleProvider requires { apiSlug: non-empty string }"
+    );
+  }
+  const t = asTransport(transport);
+  if (!t) {
+    return transportError(
+      "subtitle commands require transport.readSetting/writeSetting"
+    );
+  }
+  let setting;
+  try {
+    setting = await t.readSetting();
+  } catch (err) {
+    return transportError(
+      `readSetting failed: ${err && err.message ? err.message : String(err)}`
+    );
+  }
+  const registry = listProviders(setting);
+  const apis = registry.ok ? registry.value : [];
+  if (!apis.some((p) => p.apiSlug === apiSlug)) {
+    return kclError(
+      "PROVIDER_NOT_FOUND",
+      `provider "${apiSlug}" is not registered in setting.transApis`
+    );
+  }
+  return persistSubtitlePatch(t, { apiSlug });
+};
+
+// 设置字幕目标语言（持久化，next-load 生效）。
+export const setSubtitleTargetLanguage = (transport, { toLang } = {}) => {
+  if (typeof toLang !== "string" || !toLang) {
+    return Promise.resolve(
+      kclError(
+        "UNSUPPORTED_INPUT",
+        "setSubtitleTargetLanguage requires { toLang: non-empty string }"
+      )
+    );
+  }
+  return persistSubtitlePatch(transport, { toLang });
+};
+
+// 设置上下文模式（aiContextSlug，持久化，next-load 生效）。
+// "-" 关闭；否则必须解析到注册的 **AI** provider——不支持/不兼容时显式拒绝
+// （CONTEXT_UNSUPPORTED / PROVIDER_NOT_FOUND），绝不静默假成功。
+export const setSubtitleContextMode = async (transport, { slug } = {}) => {
+  if (typeof slug !== "string" || !slug) {
+    return kclError(
+      "UNSUPPORTED_INPUT",
+      'setSubtitleContextMode requires { slug: non-empty string or "-" }'
+    );
+  }
+  if (slug === REMAIN_KEY) {
+    return persistSubtitlePatch(transport, { aiContextSlug: REMAIN_KEY });
+  }
+  const t = asTransport(transport);
+  if (!t) {
+    return transportError(
+      "subtitle commands require transport.readSetting/writeSetting"
+    );
+  }
+  let setting;
+  try {
+    setting = await t.readSetting();
+  } catch (err) {
+    return transportError(
+      `readSetting failed: ${err && err.message ? err.message : String(err)}`
+    );
+  }
+  const registry = listProviders(setting);
+  const apis = registry.ok ? registry.value : [];
+  const found = apis.find((p) => p.apiSlug === slug);
+  if (!found) {
+    return kclError(
+      "PROVIDER_NOT_FOUND",
+      `provider "${slug}" is not registered in setting.transApis`
+    );
+  }
+  if (found.capabilities.ai !== true) {
+    return kclError(
+      "CONTEXT_UNSUPPORTED",
+      `provider "${slug}" (${found.apiType}) is not an AI engine; context mode requires an AI provider`
+    );
+  }
+  return persistSubtitlePatch(t, { aiContextSlug: slug });
+};
