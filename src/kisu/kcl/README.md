@@ -38,7 +38,18 @@ kclError("PROVIDER_NOT_FOUND", "..."); // { ok: false, value: null, error: { cod
 
 错误码（`KCL_ERROR_CODES`）：`PROVIDER_NOT_FOUND`、`PROVIDER_DISABLED`、
 `UNSUPPORTED_INPUT`、`CAPTION_UNAVAILABLE`、`CONTEXT_UNSUPPORTED`、
-`TRANSPORT_UNAVAILABLE`（消息通道不可用/无响应，如内容脚本未注入）。
+`TRANSPORT_UNAVAILABLE`（消息通道不可用/无响应，如内容脚本未注入）、
+`PROVIDER_REQUEST_FAILED`（provider 请求执行失败）。
+
+## Selection（MVP-09）
+
+- provider = `tranboxSetting.apiSlugs` **多选数组**（独立于 page 的 `rule.apiSlug`）；
+  读写见 `getSelectionProviders` / `setSelectionProviders`（经注入 setting 读写器，
+  未知 slug 整批拒绝）
+- `translateSelection` / `lookupSelection` 为执行包装器：runner 由产品层注入并绑定
+  上游 `apiTranslate` / `apiDict` 等（P4 surface，D5）。KCL 不静态 import `src/apis/*`
+  ——其依赖链含 Jest 27 无法加载的 `@streamparser/json` ESM（BL-04）
+- 词条/句子/长文本分类边界（ADR-015）在 MVP-27（INH-1168）重建时定稿
 
 ## Page 写命令 transport（MVP-07）
 
