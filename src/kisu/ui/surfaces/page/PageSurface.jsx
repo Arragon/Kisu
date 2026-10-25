@@ -1,0 +1,25 @@
+// Page surface（MVP-18 / INH-1159）：挂入 PopupShell children slot 的页面控件容器。
+// 只消费 controller 形状的 { viewModel, actions }；后续 P3 控件（MVP-19..23）
+// 在此各注册一行 slot，不改 PopupShell / controller / KCL。
+import React from "react";
+import { space } from "../../tokens/tokens";
+import { PrimaryAction } from "./PrimaryAction";
+
+export const PageSurface = ({ viewModel, actions }) => (
+  <div
+    data-testid="kisu-page-surface"
+    style={{ display: "flex", flexDirection: "column", gap: space.md }}
+  >
+    {/* slot: 主翻译动作（MVP-18） */}
+    <PrimaryAction
+      viewModel={viewModel}
+      onTranslate={actions.translate}
+      onStop={actions.stop}
+    />
+    {/* slot: 显示模式（MVP-19） */}
+    {/* slot: 目标语言（MVP-20） */}
+    {/* slot: Provider picker（MVP-21） */}
+    {/* slot: 站点策略（MVP-22） */}
+    {/* slot: 状态/错误（MVP-23） */}
+  </div>
+);
