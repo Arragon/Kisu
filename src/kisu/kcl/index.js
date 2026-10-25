@@ -22,3 +22,4 @@ export {
   setSitePreference,
 } from "./page";
 export { isMatch, isSiteBlacklisted } from "./sites";
+export { listProviders, getProvider, resolveProviders } from "./providers";
