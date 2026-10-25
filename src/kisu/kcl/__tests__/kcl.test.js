@@ -120,6 +120,7 @@ describe("KCL skeleton export surface (MVP-05)", () => {
       "lookupSelection",
       "normalizePageState",
       "readPageState",
+      "readSubtitleRuntime",
       "resolveProviders",
       "saveSiteRule",
       "setPageDisplayMode",

@@ -29,3 +29,4 @@ export {
   translateSelection,
   lookupSelection,
 } from "./selection";
+export { readSubtitleRuntime } from "./subtitleRuntime";
