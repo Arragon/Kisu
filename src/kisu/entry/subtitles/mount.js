@@ -10,7 +10,12 @@ import { createSubtitleController } from "../../product/subtitles/controller";
 import { SubtitleControl } from "../../ui/surfaces/subtitles/SubtitleControl";
 import { SubtitleModeControl } from "../../ui/surfaces/subtitles/SubtitleModeControl";
 import { SubtitleProviderPicker } from "../../ui/surfaces/subtitles/SubtitleProviderPicker";
+import { SubtitleLanguageControl } from "../../ui/surfaces/subtitles/SubtitleLanguageControl";
 import { ModeProvider } from "../../ui/primitives";
+import {
+  getSubtitleLanguageOptions,
+  getSubtitleLanguageFallback,
+} from "../../product/subtitles/languages";
 
 export const mountSubtitleControl = ({
   getSetting,
@@ -48,6 +53,13 @@ export const mountSubtitleControl = ({
           <SubtitleProviderPicker
             viewModel={view}
             onSetProvider={controller.actions.setProvider}
+          />
+          {/* MVP-42 slot：目标语言（OPT_LANGS_TO 唯一事实源经 entry 注入） */}
+          <SubtitleLanguageControl
+            viewModel={view}
+            options={getSubtitleLanguageOptions()}
+            fallbackValue={getSubtitleLanguageFallback()}
+            onSetTargetLanguage={controller.actions.setTargetLanguage}
           />
         </SubtitleControl>
       </ModeProvider>
