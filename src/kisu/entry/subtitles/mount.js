@@ -12,6 +12,7 @@ import { SubtitleModeControl } from "../../ui/surfaces/subtitles/SubtitleModeCon
 import { SubtitleProviderPicker } from "../../ui/surfaces/subtitles/SubtitleProviderPicker";
 import { SubtitleLanguageControl } from "../../ui/surfaces/subtitles/SubtitleLanguageControl";
 import { SubtitleContextControl } from "../../ui/surfaces/subtitles/SubtitleContextControl";
+import { SubtitleStatus } from "../../ui/surfaces/subtitles/SubtitleStatus";
 import { ModeProvider } from "../../ui/primitives";
 import {
   getSubtitleLanguageOptions,
@@ -67,6 +68,8 @@ export const mountSubtitleControl = ({
             viewModel={view}
             onSetContextMode={controller.actions.setContextMode}
           />
+          {/* MVP-44 slot：状态/失败（被动行，不阻塞播放） */}
+          <SubtitleStatus viewModel={view} />
         </SubtitleControl>
       </ModeProvider>
     );
