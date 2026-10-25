@@ -6,6 +6,7 @@ import { MSG_TRANS_GETRULE, MSG_TRANS_PUTRULE, MSG_TRANS_TOGGLE, MSG_SAVE_RULE }
 import { GLOBLA_RULE, GLOBAL_KEY } from "../../config/rules";
 import { kclOk, kclError } from "./result";
 import { isSiteBlacklisted } from "./sites";
+import { listProviders } from "./providers";
 
 export const PAGE_DISPLAY_ORDERS = Object.freeze([
   "original-first",
@@ -44,6 +45,9 @@ export const normalizePageState = (payload, href = "") => {
     apis === null
       ? null
       : apis.some((a) => a && a.apiSlug === apiSlug);
+  // Provider 注册表投影（MVP-21）：白名单 descriptor 列表随状态下行为 surface 供选择
+  const registry = listProviders(setting);
+  const providers = registry.ok ? registry.value : [];
   const toLangRaw = asString(rule.toLang);
   const toLang = toLangRaw && toLangRaw !== "*" ? toLangRaw : GLOBLA_RULE.toLang;
   const blacklisted = href
@@ -57,6 +61,7 @@ export const normalizePageState = (payload, href = "") => {
     translation: transOpen ? "active" : "idle",
     displayMode: Object.freeze({ onlyTranslation, order }),
     provider: Object.freeze({ apiSlug, registered: providerRegistered }),
+    providers,
     targetLanguage: toLang,
     site: Object.freeze({ autoTranslate: transOpen, blacklisted }),
   });

@@ -84,6 +84,7 @@ describe("page controller view-model contract (MVP-15)", () => {
     expect(Object.keys(vm.data).sort()).toEqual([
       "displayMode",
       "provider",
+      "providers",
       "site",
       "targetLanguage",
       "translation",

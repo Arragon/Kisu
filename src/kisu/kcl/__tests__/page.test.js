@@ -81,6 +81,7 @@ describe("normalizePageState (MVP-06)", () => {
       translation: "active",
       displayMode: { onlyTranslation: true, order: "translation-first" },
       provider: { apiSlug: "DeepL", registered: null }, // fixture 无 transApis → 无法判定
+      providers: [],
       targetLanguage: "ja",
       site: { autoTranslate: true, blacklisted: true },
     });
@@ -97,6 +98,7 @@ describe("normalizePageState (MVP-06)", () => {
         order: GLOBLA_RULE.transOrder,
       },
       provider: { apiSlug: GLOBLA_RULE.apiSlug, registered: null },
+      providers: [],
       targetLanguage: GLOBLA_RULE.toLang,
       site: { autoTranslate: false, blacklisted: false },
     });
@@ -136,6 +138,25 @@ describe("normalizePageState (MVP-06)", () => {
       },
     });
     expect(registered.provider.registered).toBe(true);
+  });
+
+  it("projects the whitelisted provider registry when transApis is available (MVP-21)", () => {
+    const state = normalizePageState({
+      rule: { apiSlug: "Microsoft" },
+      setting: {
+        blacklist: "",
+        transApis: [
+          { apiSlug: "Microsoft", apiName: "Microsoft", apiType: "Microsoft" },
+          { apiSlug: "my-ai", apiName: "My AI", apiType: "OpenAI", apiKey: "secret" },
+        ],
+      },
+    });
+    expect(state.providers).toEqual([
+      { apiSlug: "Microsoft", name: "Microsoft", apiType: "Microsoft", usable: true, capabilities: expect.any(Object) },
+      { apiSlug: "my-ai", name: "My AI", apiType: "OpenAI", usable: true, capabilities: expect.any(Object) },
+    ]);
+    expect(JSON.stringify(state.providers)).not.toContain("secret");
+    expect(state.provider).toEqual({ apiSlug: "Microsoft", registered: true });
   });
 
   it("skips blacklist evaluation when href is not provided", () => {

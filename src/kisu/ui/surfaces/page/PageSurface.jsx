@@ -6,6 +6,7 @@ import { space } from "../../tokens/tokens";
 import { PrimaryAction } from "./PrimaryAction";
 import { PageDisplayMode } from "./PageDisplayMode";
 import { PageLanguageControl } from "./PageLanguageControl";
+import { PageProviderPicker } from "./PageProviderPicker";
 
 export const PageSurface = ({
   viewModel,
@@ -38,7 +39,12 @@ export const PageSurface = ({
         onSetTargetLanguage={actions.setTargetLanguage}
       />
     )}
-    {/* slot: Provider picker（MVP-21） */}
+    {/* slot: Provider picker（MVP-21）；provider 列表随 KCL page 状态下行 */}
+    <PageProviderPicker
+      viewModel={viewModel}
+      onSetProvider={actions.setProvider}
+      onManageServices={actions.manageServices}
+    />
     {/* slot: 站点策略（MVP-22） */}
     {/* slot: 状态/错误（MVP-23） */}
   </div>

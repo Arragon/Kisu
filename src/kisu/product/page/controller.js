@@ -6,6 +6,7 @@ import {
   setPageTranslation,
   setPageDisplayMode,
   setPageTargetLanguage,
+  setPageProvider,
 } from "../../kcl";
 
 export const PAGE_VIEW_STATUSES = Object.freeze([
@@ -66,6 +67,7 @@ const fromState = (state) => {
       translation: state.translation,
       displayMode: state.displayMode,
       provider: state.provider,
+      providers: state.providers,
       targetLanguage: state.targetLanguage,
       site: state.site,
     }),
@@ -74,7 +76,8 @@ const fromState = (state) => {
       stop: active,
       changeDisplayMode: blockedBy === null,
       changeLanguage: blockedBy === null,
-      changeProvider: blockedBy === null,
+      // provider 失效时换一个有效 provider 正是恢复路径——保持可用
+      changeProvider: blockedBy !== "site",
     }),
     blockedBy,
     error: null,
@@ -156,6 +159,22 @@ export const createPageController = ({ sendAction, href = "" } = {}) => {
     return current;
   };
 
+  // Provider（MVP-21）：经 KCL setPageProvider（注册表校验 + PUTRULE）。
+  // 失败保留上一真实视图（错误呈现归 MVP-23）。
+  const runSetProvider = async (apiSlug) => {
+    if (!current.can.changeProvider || disposed) {
+      return current;
+    }
+    const result = await setPageProvider(sendAction, { apiSlug });
+    if (disposed) {
+      return current;
+    }
+    if (result.ok) {
+      emit(fromState(result.value));
+    }
+    return current;
+  };
+
   return {
     getView: () => current,
     subscribe: (listener) => {
@@ -173,6 +192,7 @@ export const createPageController = ({ sendAction, href = "" } = {}) => {
       stop: () => runToggle(false),
       setDisplayMode: (patch) => runSetDisplayMode(patch),
       setTargetLanguage: (toLang) => runSetTargetLanguage(toLang),
+      setProvider: (apiSlug) => runSetProvider(apiSlug),
     },
     dispose: () => {
       disposed = true;
