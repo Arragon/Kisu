@@ -23,3 +23,9 @@ export {
 } from "./page";
 export { isMatch, isSiteBlacklisted } from "./sites";
 export { listProviders, getProvider, resolveProviders } from "./providers";
+export {
+  getSelectionProviders,
+  setSelectionProviders,
+  translateSelection,
+  lookupSelection,
+} from "./selection";

@@ -50,6 +50,7 @@ describe("KCL result contract (MVP-05)", () => {
       "CONTEXT_UNSUPPORTED",
       "PROVIDER_DISABLED",
       "PROVIDER_NOT_FOUND",
+      "PROVIDER_REQUEST_FAILED",
       "TRANSPORT_UNAVAILABLE",
       "UNSUPPORTED_INPUT",
     ]);
@@ -107,6 +108,7 @@ describe("KCL skeleton export surface (MVP-05)", () => {
       "KISU_VERSION",
       "PAGE_DISPLAY_ORDERS",
       "getProvider",
+      "getSelectionProviders",
       "isCapabilitySupported",
       "isKclResult",
       "isMatch",
@@ -115,6 +117,7 @@ describe("KCL skeleton export surface (MVP-05)", () => {
       "kclError",
       "kclOk",
       "listProviders",
+      "lookupSelection",
       "normalizePageState",
       "readPageState",
       "resolveProviders",
@@ -123,8 +126,10 @@ describe("KCL skeleton export surface (MVP-05)", () => {
       "setPageProvider",
       "setPageTargetLanguage",
       "setPageTranslation",
+      "setSelectionProviders",
       "setSitePreference",
       "subscribePageState",
+      "translateSelection",
     ]);
     expect(kcl.KISU_VERSION).toBe(KISU_VERSION);
   });
