@@ -37,6 +37,13 @@ export const normalizePageState = (payload, href = "") => {
     : GLOBLA_RULE.transOrder;
   const apiSlugRaw = asString(rule.apiSlug);
   const apiSlug = apiSlugRaw && apiSlugRaw !== "*" ? apiSlugRaw : GLOBLA_RULE.apiSlug;
+  // registered：false = 注册表中确认不存在（失效引用）；null = 注册表不可得（无法判定）
+  const apis =
+    setting && Array.isArray(setting.transApis) ? setting.transApis : null;
+  const providerRegistered =
+    apis === null
+      ? null
+      : apis.some((a) => a && a.apiSlug === apiSlug);
   const toLangRaw = asString(rule.toLang);
   const toLang = toLangRaw && toLangRaw !== "*" ? toLangRaw : GLOBLA_RULE.toLang;
   const blacklisted = href
@@ -49,7 +56,7 @@ export const normalizePageState = (payload, href = "") => {
   return Object.freeze({
     translation: transOpen ? "active" : "idle",
     displayMode: Object.freeze({ onlyTranslation, order }),
-    provider: Object.freeze({ apiSlug }),
+    provider: Object.freeze({ apiSlug, registered: providerRegistered }),
     targetLanguage: toLang,
     site: Object.freeze({ autoTranslate: transOpen, blacklisted }),
   });

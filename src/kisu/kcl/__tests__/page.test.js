@@ -80,7 +80,7 @@ describe("normalizePageState (MVP-06)", () => {
     expect(state).toEqual({
       translation: "active",
       displayMode: { onlyTranslation: true, order: "translation-first" },
-      provider: { apiSlug: "DeepL" },
+      provider: { apiSlug: "DeepL", registered: null }, // fixture 无 transApis → 无法判定
       targetLanguage: "ja",
       site: { autoTranslate: true, blacklisted: true },
     });
@@ -96,7 +96,7 @@ describe("normalizePageState (MVP-06)", () => {
         onlyTranslation: false,
         order: GLOBLA_RULE.transOrder,
       },
-      provider: { apiSlug: GLOBLA_RULE.apiSlug },
+      provider: { apiSlug: GLOBLA_RULE.apiSlug, registered: null },
       targetLanguage: GLOBLA_RULE.toLang,
       site: { autoTranslate: false, blacklisted: false },
     });
@@ -119,6 +119,23 @@ describe("normalizePageState (MVP-06)", () => {
     });
     expect(state.provider.apiSlug).toBe(GLOBLA_RULE.apiSlug);
     expect(state.targetLanguage).toBe(GLOBLA_RULE.toLang);
+  });
+
+  it("marks unregistered providers when the registry is available", () => {
+    const state = normalizePageState({
+      rule: RULE_ACTIVE,
+      setting: { blacklist: "", transApis: [{ apiSlug: "Microsoft" }] },
+    });
+    expect(state.provider).toEqual({ apiSlug: "DeepL", registered: false });
+
+    const registered = normalizePageState({
+      rule: RULE_ACTIVE,
+      setting: {
+        blacklist: "",
+        transApis: [{ apiSlug: "DeepL" }, { apiSlug: "Microsoft" }],
+      },
+    });
+    expect(registered.provider.registered).toBe(true);
   });
 
   it("skips blacklist evaluation when href is not provided", () => {
