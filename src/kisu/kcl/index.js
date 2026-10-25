@@ -34,3 +34,10 @@ export {
   SUBTITLE_DISPLAY_ORDERS,
   normalizeSubtitleState,
 } from "./subtitles";
+export {
+  setSubtitleEnabled,
+  setSubtitleDisplayMode,
+  setSubtitleProvider,
+  setSubtitleTargetLanguage,
+  setSubtitleContextMode,
+} from "./subtitles";

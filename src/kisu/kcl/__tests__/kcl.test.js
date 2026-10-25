@@ -131,6 +131,11 @@ describe("KCL skeleton export surface (MVP-05)", () => {
       "setPageTranslation",
       "setSelectionProviders",
       "setSitePreference",
+      "setSubtitleContextMode",
+      "setSubtitleDisplayMode",
+      "setSubtitleEnabled",
+      "setSubtitleProvider",
+      "setSubtitleTargetLanguage",
       "subscribePageState",
       "translateSelection",
     ]);

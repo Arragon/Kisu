@@ -64,6 +64,17 @@ kclError("PROVIDER_NOT_FOUND", "..."); // { ok: false, value: null, error: { cod
   （absent / unregistered / incompatible / supported 四态；上游对 segSlug 不做的
   硬校验由 KCL 补上）与 runtime 状态；回退默认取 `DEFAULT_SUBTITLE_SETTING`
 
+### Subtitle 写命令（MVP-11）——D3 的 M0 回退：next-load
+
+`setSubtitleEnabled / setSubtitleDisplayMode / setSubtitleProvider /
+setSubtitleTargetLanguage / setSubtitleContextMode`（经注入 setting 读写器）：
+只持久化 `subtitleSetting`，**下次字幕系统启动（新视频/刷新）生效**；产品层 UI
+必须向用户明示。上游 `updateSetting` 的实时通道（isBilingual/displayOrder 等
+六字段）不对 KCL 开放（KP-001 只读），实时切换需 KP-002 扩展，留待 D3 正式拍板。
+context mode 不支持/不兼容时**显式拒绝**（`CONTEXT_UNSUPPORTED` /
+`PROVIDER_NOT_FOUND`），绝不静默假成功。每条命令写后重读 setting 并返回归一化
+投影（验证真实持久状态）。
+
 ## Page 写命令 transport（MVP-07）
 
 命令接受 transport：`{ sendTab(action, args?), sendBg(action, args)?,
