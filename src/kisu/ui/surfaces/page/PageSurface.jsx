@@ -7,12 +7,15 @@ import { PrimaryAction } from "./PrimaryAction";
 import { PageDisplayMode } from "./PageDisplayMode";
 import { PageLanguageControl } from "./PageLanguageControl";
 import { PageProviderPicker } from "./PageProviderPicker";
+import { SitePreferenceAction } from "./SitePreferenceAction";
 
 export const PageSurface = ({
   viewModel,
   actions,
   languageOptions,
   languageFallback,
+  siteDomain,
+  sitePattern,
 }) => (
   <div
     data-testid="kisu-page-surface"
@@ -45,7 +48,13 @@ export const PageSurface = ({
       onSetProvider={actions.setProvider}
       onManageServices={actions.manageServices}
     />
-    {/* slot: 站点策略（MVP-22） */}
+    {/* slot: 站点策略（MVP-22）；domain/pattern 由入口组合注入 */}
+    <SitePreferenceAction
+      viewModel={viewModel}
+      domain={siteDomain}
+      pattern={sitePattern}
+      onSetSitePreference={actions.setSitePreference}
+    />
     {/* slot: 状态/错误（MVP-23） */}
   </div>
 );
