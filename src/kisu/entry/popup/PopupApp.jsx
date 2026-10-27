@@ -17,6 +17,7 @@ export const PopupApp = ({
   languageOptions,
   languageFallback,
   mode = "light",
+  colorSet = null,
   onClose,
   onReady,
 }) => {
@@ -46,8 +47,8 @@ export const PopupApp = ({
   void onReady;
 
   return (
-    <ModeProvider mode={mode}>
-      <PopupShell title="Kisu" viewModel={view} onClose={onClose}>
+    <ModeProvider mode={mode} colorSet={colorSet}>
+      <PopupShell title="Kisu" viewModel={view} onClose={onClose} mode={mode} colorSet={colorSet}>
         <PageSurface
           viewModel={view}
           actions={controller.actions}
@@ -65,6 +66,7 @@ export const mountPopupApp = ({
   dependencies,
   host,
   mode = "light",
+  colorSet = null,
   siteDomain,
   sitePattern,
   languageOptions,
@@ -83,6 +85,7 @@ export const mountPopupApp = ({
     <PopupApp
       dependencies={dependencies}
       mode={mode}
+      colorSet={colorSet}
       siteDomain={siteDomain}
       sitePattern={sitePattern}
       languageOptions={languageOptions}
