@@ -39,6 +39,7 @@ export const SettingsShell = ({
   initialId = "general",
   onOpenLegacy,
   mode = "light",
+  colorSet = null,
 }) => {
   const palette = useColorPalette();
   const refs = useRef([]);
@@ -70,7 +71,7 @@ export const SettingsShell = ({
   };
 
   return (
-    <ModeProvider mode={mode}>
+    <ModeProvider mode={mode} colorSet={colorSet}>
       <div
         data-testid="kisu-settings-shell"
         style={{ display: "flex", gap: space.lg }}
