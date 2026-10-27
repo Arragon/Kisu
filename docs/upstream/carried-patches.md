@@ -51,7 +51,7 @@ Last revalidated against:
 
 ```text
 ID: KP-001
-Status: proposed
+Status: active
 Why required:
   The YouTube subtitle subsystem is a closure singleton. YouTubeInitializer keeps an
   `initialized` guard (src/subtitle/YouTubeCaptionProvider.js:1020-1031) and the provider
@@ -60,19 +60,31 @@ Why required:
   KCL subtitle intents, `getSubtitleState()` is not implementable without an upstream
   accessor. See docs/architecture/control-paths.md path 3.
 Upstream-owned files touched:
-  src/subtitle/YouTubeCaptionProvider.js (add an exported instance accessor)
+  src/subtitle/YouTubeCaptionProvider.js — read-only `getStatusSnapshot()` class method
+    (~10 net code lines, no behavior change) + module-level instance reference and
+    exported `getYouTubeCaptionStatus()` accessor; snapshot is frozen, exposes no
+    instance or mutable reference, provides no write path (ADR-011).
+  src/subtitle/YouTubeCaptionProvider.test.js — snapshot tests only, no upstream
+    assertions changed.
 Kisu consumer:
-  src/kisu/kcl/subtitles.js — getSubtitleState()
+  src/kisu/kcl/subtitleRuntime.js — readSubtitleRuntime() (accessor injected by the
+    Kisu content bootstrap; KCL does not statically import src/subtitle/*, see BL-04).
+    Settings-level reads remain src/kisu/kcl/subtitles.js (MVP-10).
 Could be upstreamed generically:
   Yes. A read-only accessor for the active subtitle provider is a reasonable generic
   addition and should be proposed upstream first.
 Removal condition:
   Upstream exports an equivalent public accessor.
 Tests:
-  Unit test proving the accessor returns null before mount and the live instance after
-  mount, and that it survives SPA navigation without returning a stale instance.
+  "KP-001 status snapshot accessor" (YouTubeCaptionProvider.test.js): snapshot is
+  frozen with the documented shape; exported accessor returns null before
+  initialization and a live snapshot after mount; snapshot reflects a
+  yt-navigate-finish SPA navigation without a stale or null instance.
+  KCL wrapper covered in src/kisu/kcl/__tests__/subtitleRuntime.test.js.
+Implemented: 2026-10-25 (M0 rebuild; original ADR-011 text lost — decision re-derived
+  from the INH-1228 design-evidence comment, see docs/architecture/decisions.md).
 Last revalidated against:
-  v2.0.32 (7dfc03eb)
+  v2.0.32 (7dfc03eb) + EU-001..004 on next@m0-start (6037227)
 ```
 
 ## KP-002 — Extend `updateSetting` to cover provider, language and enabled
@@ -173,4 +185,28 @@ Date: 2026-09-13
 Baseline: v2.0.32 (7dfc03eb)
 Patches reviewed: KP-001, KP-002, KP-003, KP-004 (all newly proposed)
 Outcome: proposed only, no code carried. No patch has been implemented.
+
+Date: 2026-10-25
+Baseline: v2.0.32 (7dfc03eb) + EU-001..004 on next@m0-start (6037227)
+Patches reviewed: KP-001 (proposed → active)
+Outcome: KP-001 implemented as the narrowed read-only accessor (getStatusSnapshot +
+  getYouTubeCaptionStatus, ~10 net code lines in YouTubeCaptionProvider.js, snapshot
+  tests in its test file). Original ADR-011 approval evidenced by the INH-1228
+  design comment; text re-derived in docs/architecture/decisions.md.
+  KP-002/KP-003/KP-004 remain proposed (D3/D4 decisions still open for 002/004).
+
+Date: 2026-10-25 (second pass, MVP-46 divergence audit / INH-1187)
+Baseline: v2.0.32 (7dfc03eb) + EU-001..004 on next@m0-start (6037227)
+Patches reviewed: KP-001 (active, revalidated), KP-002/KP-003/KP-004 (proposed, unchanged)
+Outcome: evidence-based diff of the whole subtitle-domain TRACK surface vs m0-start:
+  src/subtitle/YouTubeCaptionProvider.js +39/-3 and its test +72 — exactly the KP-001
+  hunks (getStatusSnapshot + getYouTubeCaptionStatus + snapshot tests); no other
+  TRACK change in src/subtitle/*, src/injectors/*, injector-subtitle.js.
+  Zero algorithm copying: no src/kisu file imports src/subtitle/* or segmentation/
+  queue internals (subtitleRuntime.js grep hit is comment text only); segmentation,
+  translation queue and rendering are REUSE via the KP-001 read-only snapshot +
+  upstream execution paths. KCL subtitle semantics: read-only snapshot (KP-001) +
+  next-load commands (PRs #9/#10) — no real-time channel, live switching deferred
+  to KP-002 + D3. Verdict: divergence confined to KP-001 as registered; no
+  unregistered TRACK modification; audit PASS.
 ```
