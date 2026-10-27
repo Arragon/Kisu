@@ -4,7 +4,11 @@ import CircularProgress from "@mui/material/CircularProgress";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import { useEffect, useMemo, useState } from "react";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import ReplayRoundedIcon from "@mui/icons-material/ReplayRounded";
+import VolumeUpIcon from "@mui/icons-material/VolumeUp";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { apiTranslate } from "../../apis";
 import {
   API_SPE_TYPES,
@@ -12,13 +16,21 @@ import {
   OPT_TRANS_GOOGLE,
 } from "../../config";
 import { useI18n } from "../../hooks/I18n";
+import { parseMathInText } from "../../libs/mathParse";
 import CopyBtn from "./CopyBtn";
+import { BrowserTtsBtn } from "./AudioBtn";
+import TextareaResizeGrip from "../../components/TextareaResizeGrip";
+import ApiProviderIcon from "../../components/ApiProviderIcon";
+import useTextareaHeightLock, {
+  useTextareaGripStyle,
+  useReleaseOnGripHidden,
+} from "../../hooks/useTextareaHeightLock";
 
 /**
- * 判断划词翻译结果是否允许进行可见的流式渲染。
+ * Determine whether selection translation results can render incrementally.
  *
- * @param {Object} apiSetting 翻译接口配置。
- * @returns {boolean} 当前接口是否应把增量 chunk 直接写入划词翻译输出框。
+ * @param {Object} apiSetting Translation API settings.
+ * @returns {boolean} Whether this API should display streaming chunks immediately.
  */
 const canRenderStream = (apiSetting) =>
   Boolean(
@@ -28,10 +40,10 @@ const canRenderStream = (apiSetting) =>
   );
 
 /**
- * 归一化流式回调中的文本载荷。
+ * Normalize the text payload from a streaming callback.
  *
- * @param {string|string[]} text 流式回调返回的局部文本或最终翻译结果。
- * @returns {string} 可直接写入 UI 的译文字符串。
+ * @param {string|string[]} text Partial or final text from a streaming callback.
+ * @returns {string} Translation text ready for display.
  */
 const normalizeChunkText = (text) => {
   if (Array.isArray(text)) {
@@ -41,25 +53,113 @@ const normalizeChunkText = (text) => {
   return text || "";
 };
 
+function getPopupErrorMessage(value, concise = false) {
+  if (typeof value !== "string") return "";
+  const message = value.replace(/\n\s*at\b[\s\S]*$/, "").trim();
+  if (
+    !message ||
+    /^[{[]/.test(message) ||
+    /[a-z][a-z\d+.-]*:\/\/|www\.|<\/?[a-z!][^>]*>/i.test(message)
+  ) {
+    return "";
+  }
+  if (!concise) return message;
+  const singleLine = message.replace(/\s+/g, " ");
+  return singleLine.length > 180 ? `${singleLine.slice(0, 179)}…` : singleLine;
+}
+
+function formatPopupError(error, i18n) {
+  const generic = i18n(
+    "popup_text_failed",
+    "Translation failed. Please retry."
+  );
+  const auth = i18n(
+    "popup_text_auth_failed",
+    "Check your API Key in Settings."
+  );
+  const raw = String(error || "")
+    .replace(/^(?:Uncaught\s+)?(?:\w*Error):\s*/i, "")
+    .trim();
+  const isAuthError = (message) =>
+    /unauthorized|(?:missing|invalid|incorrect)\s+(?:an?\s+)?api[\s_-]*key|api[\s_-]*key\s+(?:is\s+)?(?:missing|required|invalid|incorrect)|(?:authentication|authorization)\s+(?:failed|failure)/i.test(
+      message
+    );
+  let details;
+  try {
+    details = JSON.parse(raw);
+  } catch {
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try {
+        details = JSON.parse(raw.slice(start, end + 1));
+      } catch {
+        // A malformed diagnostic payload must not appear in the popup.
+      }
+    }
+  }
+  if (details === undefined) {
+    const message = getPopupErrorMessage(raw);
+    return message ? (isAuthError(message) ? auth : message) : generic;
+  }
+  if (!details || typeof details !== "object" || Array.isArray(details)) {
+    return generic;
+  }
+
+  let response = details.response ?? details;
+  if (typeof response === "string") {
+    try {
+      response = JSON.parse(response);
+    } catch {
+      // Plain upstream messages do not need a JSON response envelope.
+    }
+  }
+  const message = getPopupErrorMessage(
+    typeof response === "string"
+      ? response
+      : response?.error?.message || response?.message,
+    true
+  );
+  const status = Number(details.status);
+  const hasStatus = Number.isInteger(status) && status >= 100 && status <= 599;
+  const detail =
+    status === 401 || isAuthError(`${details.statusText || ""} ${message}`)
+      ? auth
+      : message;
+  if (!hasStatus) return detail || generic;
+  const failed = i18n(
+    "popup_text_request_failed",
+    "Request failed ({status})"
+  ).replace("{status}", String(status));
+  return detail ? `${failed}: ${detail}` : failed;
+}
+
 /**
- * 将接口响应转换为文本框可直接显示和复制的纯文本。
+ * Convert an API response to plain text for display and copying.
  *
- * @param {string} text 翻译接口返回的文本。
- * @param {string} apiType 翻译接口类型。
- * @param {string} sourceText 原始待翻译文本。
- * @returns {string} 供文本 UI 使用的译文。
+ * @param {string} text Text returned by the translation API.
+ * @param {string} apiType Translation API type.
+ * @param {string} sourceText Original text to translate.
+ * @param {boolean} parseLatex Whether to render inline LaTeX as Unicode.
+ * @returns {string} Translation text ready for the text UI.
  */
-const normalizeTranslationText = (text, apiType, sourceText) => {
+const normalizeTranslationText = (text, apiType, sourceText, parseLatex) => {
   const normalizedText = normalizeChunkText(text);
+  // Convert inline LaTeX before unescaping newlines so commands such as
+  // `\right` are not split by the escaped carriage-return replacement.
+  const mathText = parseLatex
+    ? parseMathInText(normalizedText)
+    : normalizedText;
+
   if (apiType === OPT_TRANS_GOOGLE) {
-    return normalizedText.replace(/[\t ]*(\r\n|\r|\n)[\t ]*/g, "\n");
+    return mathText.replace(/[\t ]*(\r\n|\r|\n)[\t ]*/g, "\n");
   }
 
   if (API_SPE_TYPES.ai.has(apiType) && /\r\n|\r|\n/.test(sourceText)) {
-    return normalizedText.replace(/\\r\\n|\\n|\\r/g, "\n");
+    return mathText.replace(/\\r\\n|\\n|\\r/g, "\n");
   }
 
-  return normalizedText;
+  return mathText;
 };
 
 /**
@@ -93,8 +193,8 @@ const translateBuiltinText = async (
     fromLang === "auto" && detectedLang ? detectedLang : fromLang;
   let remainingIndexes = translatableIndexes;
 
-  // 完整文本检测仍未解析出语言时，只允许首个片段走 auto/fallback。
-  // 成功后复用其源语言，避免其余片段并发触发远程检测。
+  // If full-input detection has no result, use auto/fallback only for the first fragment.
+  // Reuse its source language to avoid concurrent remote detection for later fragments.
   if (requestFromLang === "auto") {
     const [firstIndex, ...restIndexes] = translatableIndexes;
     const firstResult = await translate(parts[firstIndex], "auto");
@@ -124,16 +224,23 @@ const translateBuiltinText = async (
 };
 
 /**
- * 单个划词翻译结果组件，负责发起指定服务商的翻译请求并渲染译文。
+ * Request and display a selection translation from one provider.
  *
- * @param {Object} props 组件参数。
- * @param {string} props.text 需要翻译的原始文本。
- * @param {string} props.fromLang 源语言代码。
- * @param {string} props.toLang 目标语言代码。
- * @param {string} props.apiSlug 选用的翻译 API 唯一标识。
- * @param {Array<Object>} props.transApis 可用翻译 API 配置列表。
- * @param {boolean} [props.simpleStyle=false] 是否使用极简文本样式渲染。
- * @returns {JSX.Element|null} 单个翻译服务商的结果视图。
+ * @param {Object} props Component props.
+ * @param {string} props.text Original text to translate.
+ * @param {string} props.fromLang Source language code.
+ * @param {string} props.toLang Target language code.
+ * @param {string} props.apiSlug Selected translation API identifier.
+ * @param {Array<Object>} props.transApis Available translation API settings.
+ * @param {boolean} [props.simpleStyle=false] Whether to use the simple text layout.
+ * @param {boolean} [props.isPlayground=false] Whether to render the full Playground result surface.
+ * @param {boolean} [props.isPopup=false] Whether to render a popup result section.
+ * @param {boolean} [props.showProvider=true] Whether to show the provider section header.
+ * @param {HTMLElement|null} [props.actionContainer=null] Host for single-provider popup actions.
+ * @param {boolean} [props.waitForSourceDetection=false] Whether the target requires completed source detection.
+ * @param {number} [props.requestRevision=0] Explicit submission revision for retrying unchanged input.
+ * @param {Function} [props.onActionPointerDown] Host focus policy for result actions.
+ * @returns {JSX.Element|null} Result view for one translation provider.
  */
 export default function TranCont({
   text,
@@ -142,16 +249,53 @@ export default function TranCont({
   apiSlug,
   transApis,
   translateVariants = true,
+  parseLatex = false,
   detectedLang = "",
   sourceDetectionPending = false,
+  waitForSourceDetection = false,
   simpleStyle = false,
+  isPlayground = false,
+  isPopup = false,
+  showProvider = true,
+  actionContainer = null,
+  requestRevision = 0,
+  onActionPointerDown,
 }) {
   const i18n = useI18n();
   const [trText, setTrText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [attemptRevision, setAttemptRevision] = useState(requestRevision);
+  const [retryRevision, setRetryRevision] = useState(0);
+  const requestPendingRef = useRef(false);
+  const gripStyle = useTextareaGripStyle();
+  const resultHeightLock = useTextareaHeightLock(
+    // 键随 apiSlug 走：TranForm 以 key={slug} 并存多个结果实例，共享键
+    // 会让各实例互改写同一会话记忆；playground 为单实例，键保留。
+    isPopup
+      ? `trancont-popup-result:${apiSlug}`
+      : isPlayground
+        ? "trancont-result-playground"
+        : `trancont-result:${apiSlug}`
+  );
+  useReleaseOnGripHidden(gripStyle, resultHeightLock.releaseHeight);
 
-  // 根据 slug 找到当前组件实例负责调用的翻译接口配置。
+  // 内容清空 → 彻底解锁：清除会话高度记忆并还原 root，手柄随内容门控
+  // 消失；门控表达式的锁定分支保留（服务于「有内容且已锁」的存续态）。
+  // useLayoutEffect：空内容解锁须先于绘制，防重挂载首帧以记忆高度闪现。
+  // releaseHeight 为 useCallback([lockKey]) 产物（lockKey 不变则引用恒
+  // 定），经解构取稳定引用后进依赖数组——消除对 hook 返回对象整体的
+  // exhaustive-deps 告警形态（发布面：CRA 下 warning 即构建失败）。
+  const { releaseHeight: releaseResultHeight } = resultHeightLock;
+  useLayoutEffect(() => {
+    // 释放判据用原文而非译文：新请求发起时 trText 先被清空，若监听
+    // trText 会在重译同一原文时误删会话高度记忆；仅原文清空才彻底解锁。
+    if (!text?.trim()) {
+      releaseResultHeight();
+    }
+  }, [text, releaseResultHeight]);
+
+  // Resolve the translation API settings for this instance's slug.
   const apiSetting = useMemo(
     () => transApis.find((api) => api.apiSlug === apiSlug),
     [transApis, apiSlug]
@@ -159,10 +303,12 @@ export default function TranCont({
   const coordinatesBuiltinSource =
     apiSetting?.apiType === OPT_TRANS_BUILTINAI && fromLang === "auto";
   const builtinDetectedLang = coordinatesBuiltinSource ? detectedLang : "";
-  const waitForBuiltinDetection =
-    coordinatesBuiltinSource && sourceDetectionPending;
+  const waitForDetection =
+    (coordinatesBuiltinSource || waitForSourceDetection) &&
+    sourceDetectionPending;
 
   useEffect(() => {
+    requestPendingRef.current = false;
     if (!text?.trim() || !apiSetting) {
       setTrText("");
       setLoading(false);
@@ -170,7 +316,8 @@ export default function TranCont({
       return;
     }
 
-    if (waitForBuiltinDetection) {
+    if (waitForDetection) {
+      requestPendingRef.current = true;
       setTrText("");
       setLoading(true);
       setError("");
@@ -178,18 +325,19 @@ export default function TranCont({
     }
 
     let active = true;
+    requestPendingRef.current = true;
     const controller = new AbortController();
     const enableStreamRender = canRenderStream(apiSetting);
 
     /**
-     * 接收底层翻译队列吐出的流式增量文本，并同步到当前输出框。
+     * Synchronize streaming text from the translation queue with the output field.
      *
-     * @param {Object} chunk 流式翻译分块。
-     * @param {string|string[]} chunk.text 当前分块中已经解析出的译文。
+     * @param {Object} chunk Streaming translation chunk.
+     * @param {string|string[]} chunk.text Translation text parsed from this chunk.
      */
     const handleStreamChunk = enableStreamRender
       ? ({ text: chunkText }) => {
-          // 旧请求被切换或取消后，晚到的流式分块不能再覆盖当前划词结果。
+          // Ignore late chunks from replaced or canceled requests.
           if (!active || controller.signal.aborted) {
             return;
           }
@@ -197,7 +345,8 @@ export default function TranCont({
           const nextText = normalizeTranslationText(
             chunkText,
             apiSetting.apiType,
-            text
+            text,
+            parseLatex
           );
           if (nextText) {
             setTrText(nextText);
@@ -220,7 +369,7 @@ export default function TranCont({
             textFormat: "text",
             translateVariants,
             onStreamChunk: handleStreamChunk,
-            // 将组件生命周期的取消信号下传，避免划词内容变化后旧请求继续占用网络与回写 UI。
+            // Pass cancellation through so stale requests stop using the network and updating the UI.
             signal: controller.signal,
           });
         const { trText, isSame } =
@@ -237,7 +386,12 @@ export default function TranCont({
           setTrText(
             isSame
               ? ""
-              : normalizeTranslationText(trText, apiSetting.apiType, text)
+              : normalizeTranslationText(
+                  trText,
+                  apiSetting.apiType,
+                  text,
+                  parseLatex
+                )
           );
         }
       } catch (err) {
@@ -250,6 +404,7 @@ export default function TranCont({
         }
       } finally {
         if (active) {
+          requestPendingRef.current = false;
           setLoading(false);
         }
       }
@@ -257,7 +412,8 @@ export default function TranCont({
 
     return () => {
       active = false;
-      // 组件卸载或依赖变化时主动中止请求，确保后台流式连接不会继续为旧划词结果推送数据。
+      requestPendingRef.current = false;
+      // Abort on unmount or dependency changes to stop streaming data for stale selections.
       controller.abort();
     };
   }, [
@@ -266,27 +422,176 @@ export default function TranCont({
     toLang,
     apiSetting,
     translateVariants,
+    parseLatex,
     builtinDetectedLang,
-    waitForBuiltinDetection,
+    waitForDetection,
+    attemptRevision,
+    retryRevision,
   ]);
+
+  // Keep pending requests, including queued batches, intact on repeated submits.
+  // Input changes are handled above and must not trigger a second attempt here.
+  useEffect(() => {
+    if (!requestPendingRef.current) setAttemptRevision(requestRevision);
+  }, [requestRevision]);
 
   if (!apiSetting) {
     return null;
   }
 
+  const resultLabel = `${i18n("translated_text")} - ${
+    apiSetting.apiName || apiSetting.apiSlug
+  }`;
+
+  if (isPopup) {
+    const hasResult = Boolean(trText.trim() && !error);
+    const popupError = error ? formatPopupError(error, i18n) : "";
+    const actions = (
+      <div
+        className="kt-popup-text-result__actions"
+        onPointerDown={onActionPointerDown}
+      >
+        {hasResult ? (
+          <>
+            <CopyBtn
+              text={trText}
+              title={i18n("copy")}
+              copiedLabel={i18n("copy_success", "Copied")}
+            />
+            <BrowserTtsBtn
+              text={trText}
+              lang={toLang}
+              title={i18n("read_aloud")}
+            />
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              disabled
+              title={i18n("copy")}
+              aria-label={i18n("copy")}
+            >
+              <ContentCopyIcon fontSize="inherit" />
+            </button>
+            <button
+              type="button"
+              disabled
+              title={i18n("read_aloud")}
+              aria-label={i18n("read_aloud")}
+            >
+              <VolumeUpIcon fontSize="inherit" />
+            </button>
+          </>
+        )}
+      </div>
+    );
+
+    return (
+      <section
+        className="kt-popup-text-result"
+        data-api-slug={apiSlug}
+        data-state={
+          error ? "error" : loading ? "loading" : trText ? "ready" : "empty"
+        }
+        aria-label={resultLabel}
+        aria-busy={loading}
+      >
+        {showProvider ? (
+          <div className="kt-popup-text-result__header">
+            <div className="kt-popup-text-result__provider">
+              <ApiProviderIcon
+                apiType={apiSetting.apiType}
+                size={18}
+                imageSize={14}
+                lightSurface
+              />
+              <span>{apiSetting.apiName || apiSetting.apiSlug}</span>
+            </div>
+            {actions}
+          </div>
+        ) : actionContainer ? (
+          createPortal(actions, actionContainer)
+        ) : (
+          <div className="kt-popup-text-result__header">{actions}</div>
+        )}
+        <div className="kt-popup-text-result__body">
+          {error ? (
+            <div className="kt-popup-text-result__error" role="alert">
+              <p>{popupError}</p>
+              <button
+                type="button"
+                className="kt-popup-text-result__retry"
+                onPointerDown={onActionPointerDown}
+                onClick={() => setRetryRevision((revision) => revision + 1)}
+              >
+                <ReplayRoundedIcon fontSize="inherit" />
+                {i18n("retry")}
+              </button>
+            </div>
+          ) : (
+            <>
+              {loading && (
+                <div className="kt-popup-text-result__loading">
+                  <CircularProgress
+                    size={12}
+                    aria-label={i18n("popup_translating")}
+                  />
+                  <span>{i18n("popup_translating")}</span>
+                </div>
+              )}
+              {trText ? (
+                <div className="kt-popup-text-result__content">{trText}</div>
+              ) : !loading ? (
+                <div className="kt-popup-text-result__empty">
+                  {i18n(
+                    "popup_text_result_empty",
+                    "Translation will appear here."
+                  )}
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
+        <span
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          style={{
+            width: 1,
+            height: 1,
+            position: "absolute",
+            overflow: "hidden",
+            padding: 0,
+            margin: -1,
+            border: 0,
+            clip: "rect(0 0 0 0)",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {!loading && (error || trText)
+            ? `${resultLabel}: ${popupError || trText}`
+            : ""}
+        </span>
+      </section>
+    );
+  }
+
   if (simpleStyle) {
     return (
-      <Box>
+      <Box aria-live="polite" aria-busy={loading}>
         {error ? (
           <Alert severity="error">{error}</Alert>
         ) : trText ? (
           <Stack direction="row" spacing={1} alignItems="flex-start">
-            {loading && (
-              <CircularProgress
-                size={12}
-                sx={{ flex: "0 0 auto", mt: "0.35em" }}
-              />
-            )}
+            <Box sx={{ width: 12, height: 12, flex: "0 0 auto", mt: "0.35em" }}>
+              {loading && (
+                <CircularProgress
+                  size={12}
+                  aria-label={i18n("popup_translating")}
+                />
+              )}
+            </Box>
             <Typography style={{ whiteSpace: "pre-line" }}>{trText}</Typography>
           </Stack>
         ) : loading ? (
@@ -297,37 +602,141 @@ export default function TranCont({
   }
 
   return (
-    <Box>
+    <Box
+      className={`kt-translation-result ${
+        isPlayground ? "kt-playground-translator__result" : ""
+      }`}
+    >
       <TextField
+        className={
+          isPlayground
+            ? "kt-resizable-text-field kt-translation-text-field kt-translation-text-field--result"
+            : "kt-resizable-text-field"
+        }
         size="small"
-        label={`${i18n("translated_text")} - ${apiSetting.apiName}`}
+        label={resultLabel}
+        InputLabelProps={isPlayground ? { shrink: true } : undefined}
         fullWidth
         multiline
+        inputRef={resultHeightLock.textareaRef}
+        minRows={isPlayground ? 4 : undefined}
         maxRows={10}
+        inputProps={{
+          className: "kt-resizable-textarea",
+          style: {
+            resize: gripStyle === "hidden" ? "vertical" : "none",
+            ...(isPlayground
+              ? {}
+              : { boxSizing: "border-box", paddingInlineEnd: 16 }),
+          },
+          "aria-busy": loading,
+          "aria-label": resultLabel,
+        }}
+        placeholder={
+          isPlayground && !text
+            ? i18n(
+                "playground_translation_empty_result",
+                "输入原文后，译文将在这里显示"
+              )
+            : undefined
+        }
         sx={{
-          "& textarea": {
-            resize: "vertical",
+          "& .MuiInputBase-root": {
+            overflow: "visible",
           },
         }}
         value={trText}
         helperText={error}
         InputProps={{
-          startAdornment: loading ? <CircularProgress size={16} /> : null,
-          endAdornment: (
-            <Stack
-              direction="row"
+          ...resultHeightLock.rootProps,
+          readOnly: true,
+          startAdornment: (
+            <Box
               sx={{
-                position: "absolute",
-                right: 0,
-                top: 0,
+                width: 16,
+                height: 16,
+                display: "grid",
+                placeItems: "center",
               }}
             >
-              {/* 复制当前译文；流式渲染期间复制到的是已经到达的部分文本。 */}
-              <CopyBtn text={trText} title={i18n("copy")} />
-            </Stack>
+              {loading && (
+                <CircularProgress
+                  size={16}
+                  aria-label={i18n("popup_translating")}
+                />
+              )}
+            </Box>
+          ),
+          endAdornment: (
+            <>
+              <Stack
+                onPointerDown={onActionPointerDown}
+                className={
+                  isPlayground
+                    ? "kt-translation-text-field__actions"
+                    : undefined
+                }
+                direction="row"
+                sx={
+                  isPlayground
+                    ? undefined
+                    : {
+                        position: "absolute",
+                        right: 0,
+                        top: 0,
+                      }
+                }
+              >
+                {/* Copy the current translation, including partial text during streaming. */}
+                {trText && (
+                  <CopyBtn
+                    text={trText}
+                    title={i18n("copy")}
+                    copiedLabel={i18n("copy_success", "Copied")}
+                  />
+                )}
+                <BrowserTtsBtn
+                  text={trText}
+                  lang={toLang}
+                  title={i18n("read_aloud")}
+                />
+              </Stack>
+              {(trText.trim() || resultHeightLock.lockedHeight != null) && (
+                <TextareaResizeGrip
+                  target={resultHeightLock.textareaRef}
+                  onResize={resultHeightLock.applyHeight}
+                  value={resultHeightLock.lockedHeight}
+                  label={i18n("field_resize_height")}
+                  variant={gripStyle}
+                  onRelease={resultHeightLock.releaseHeight}
+                  unlockHint={i18n("field_resize_unlock_hint")}
+                />
+              )}
+            </>
           ),
         }}
       />
+      {/* Announce completed results without repeating every streaming chunk. */}
+      <Box
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        sx={{
+          width: "1px",
+          height: "1px",
+          position: "absolute",
+          overflow: "hidden",
+          padding: 0,
+          margin: -1,
+          border: 0,
+          clip: "rect(0 0 0 0)",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {!loading && (error || trText)
+          ? `${resultLabel}: ${error || trText}`
+          : ""}
+      </Box>
     </Box>
   );
 }
