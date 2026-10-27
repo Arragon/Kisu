@@ -37,7 +37,7 @@ import { InlineStatus } from "../../ui/primitives";
 
 const projection = (result) => (result.ok ? result.value : null);
 
-export const OptionsApp = ({ dependencies, mode = "light" }) => {
+export const OptionsApp = ({ dependencies, mode = "light", colorSet = null }) => {
   const {
     sendTab,
     getSetting,
@@ -178,13 +178,14 @@ export const OptionsApp = ({ dependencies, mode = "light" }) => {
     },
   ];
 
-  return <SettingsShell sections={sections} onOpenLegacy={onOpenLegacy} mode={mode} />;
+  return <SettingsShell sections={sections} onOpenLegacy={onOpenLegacy} mode={mode} colorSet={colorSet} />;
 };
 
 export const mountOptionsApp = ({
   dependencies,
   host,
   mode = "light",
+  colorSet = null,
 } = {}) => {
   if (!host || typeof host.appendChild !== "function") {
     throw new TypeError("mountOptionsApp requires a host element");
@@ -193,7 +194,7 @@ export const mountOptionsApp = ({
   frame.setAttribute("data-kisu-options-app", "");
   host.appendChild(frame);
   const root = createRoot(frame);
-  root.render(<OptionsApp dependencies={dependencies} mode={mode} />);
+  root.render(<OptionsApp dependencies={dependencies} mode={mode} colorSet={colorSet} />);
   return {
     element: frame,
     destroy: () => {

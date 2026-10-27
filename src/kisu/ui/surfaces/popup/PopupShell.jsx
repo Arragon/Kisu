@@ -88,12 +88,13 @@ const ShellFrame = ({ title, viewModel, onClose, children }) => {
 
 export const PopupShell = ({
   mode = "light",
+  colorSet = null,
   title,
   viewModel,
   onClose,
   children,
 }) => (
-  <ModeProvider mode={mode}>
+  <ModeProvider mode={mode} colorSet={colorSet}>
     <Surface padding="none" data-testid="kisu-popup-shell" style={{ width: `${POPUP_WIDTH_PX}px` }}>
       <ShellFrame
         title={title}
