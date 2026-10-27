@@ -95,10 +95,9 @@ describe("SubtitleContextControl (MVP-43)", () => {
   });
 
   it.each([
-    ["absent", "-", 'not configured ("-")'],
     ["incompatible", "Microsoft", "not an AI engine"],
     ["unregistered", "ghost", "not registered"],
-  ])("%s capability disables the control with the reason", (_name, slug, reasonPart) => {
+  ])("broken (%s) capability disables the control with the reason", (_name, slug, reasonPart) => {
     const onSetContextMode = jest.fn();
     const { container, unmount } = mount(
       vm({ slug, supported: false, reason: `provider "${slug}" is ${reasonPart}` }),
@@ -110,6 +109,21 @@ describe("SubtitleContextControl (MVP-43)", () => {
     ).toContain(reasonPart);
     fireChange(container.querySelector("select"), "my-ai");
     expect(onSetContextMode).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  it("absent capability stays configurable (that is the point of the control)", () => {
+    const onSetContextMode = jest.fn();
+    const { container, unmount } = mount(
+      vm({ slug: "-", supported: false, reason: 'not configured ("-")' }),
+      onSetContextMode
+    );
+    expect(container.querySelector("select").disabled).toBe(false);
+    expect(
+      container.querySelector('[data-testid="kisu-subtitle-context-reason"]').textContent
+    ).toContain('not configured');
+    fireChange(container.querySelector("select"), "my-ai");
+    expect(onSetContextMode).toHaveBeenCalledWith("my-ai");
     unmount();
   });
 
