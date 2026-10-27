@@ -46,7 +46,25 @@
 - **成本/风险**：storage 层重构是唯一大成本项（KCL 注入访问器是否完全透明需实测）；`api.js` 的 -67 行删除需核对是否触及我们引用的常量（OPT_LANGS_TO/UI_LANGS 未在删除迹象中出现，UP-03 复核）。
 - **建议**：UP-02 选 **v2.1.1** 为候选 baseline，进 UP-03 `upstream-sync/<date>` 实测；若 storage 冲突超预期，回退方案是仅吸收 i18n/provider additive（部分升级需 UP-02 批准，默认整段升级）。
 
-## 6. 遗留观察
+## 6. UP-02 前置分析（2026-10-27 追加）：api.js 删除行逐行核验
+
+对 v2.1.1 `src/config/api.js` 的 -67 行逐行核对，**全部不触及 Kisu/KCL 引用面**：
+
+- 删除内容实为：`DEFAULT_CONTEXT_SIZE` 常量、两段旧版 AI system prompt 模板字符串
+  （defaultSystemPromptXml/Lines，已被新 prompt 机制取代）、`sponsors` capability
+  集合、Gemini effort 选项片段、`nobatchPromptSlug`/`aiTerms`/`contextSize` 默认项
+- **KCL/产品层引用的 api.js 符号全部 SAFE**（逐符号比对删除行）：`API_SPE_TYPES`、
+  `OPT_DICT_ALL`、`OPT_LANGS_TO`（且 v2.1.1 文件中六关键导出
+  `API_SPE_TYPES/OPT_LANGS_TO/DEFAULT_API_LIST/OPT_ALL_TRANS_TYPES/OPT_DICT_ALL/
+  OPT_LANGS_TO_CODE` 全部在场）
+- 配套核验：`msg.js` 四个核心 MSG 常量在场；`i18n.js` `UI_LANGS` 在场（-72 行
+  不触及）；`setting.js` 五导出在场且 subtitleSetting 七字段齐全；`rules.js`
+  三导出在场（GLOBLA_RULE/GLOBAL_KEY/DEFAULT_RULE）
+
+**结论**：api.js 删除行对 Kisu/KCL **零触及**；UP-02 选 v2.1.1 的常量引用风险
+排除，剩余唯一成本项仍为 storage 层重构（§3）。
+
+## 7. 遗留观察
 
 - 上游 v2.1.x 大量新增测试（Storage lifecycle、migration acceptance 等）——升级后可直接借力。
 - `blacklistStartup.js` 为新文件（黑名单启动预检），与 KCL `isSiteBlacklisted` 平行——升级后需核对语义是否一致（一致性断言测试会捕获）。
