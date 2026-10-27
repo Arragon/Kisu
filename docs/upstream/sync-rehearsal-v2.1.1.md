@@ -41,3 +41,34 @@ EU-001/003/004 的上游原始提交（ca4ea90 / 02d362e / c95bd46）经
 
 预演后已完整回滚：merge --abort、worktree 移除、预演 tag（v2.1.0/v2.1.1/v2.0.9）
 删除。仓库无残留临时状态。
+
+## 追加量化（2026-10-27）：9 冲突文件 ours-vs-theirs 差异
+
+用冲突暂存区标准比较（stage 2 = 我方 tip，stage 3 = v2.1.1）逐文件量化：
+
+| 文件 | 差异行 |
+| --- | --- |
+| src/views/Selection/TranForm.js | 1064 |
+| src/views/Options/Subtitle.js | 988 |
+| src/views/Action/Draggable.test.js | 475 |
+| src/views/Selection/TranCont.js | 522 |
+| src/subtitle/YouTubeCaptionProvider.test.js | 147 |
+| src/subtitle/subtitle.test.js | 109 |
+| src/views/Action/Draggable.js | 269 |
+| src/subtitle/BilingualSubtitleManager.test.js | 30 |
+| src/subtitle/subtitle.js | 44 |
+
+**解读**：差异 = 上游 v2.1.1 的推进（新测试、M3 相关改动等）+ 我方 EU/KP-001 增量
+的叠加，**不是字节等价的同改**。因此 UP-03 解法细化为：
+
+1. EU-003/004 载体（Draggable/TranForm/TranCont）：上游已含 EU 提交（三提交
+   ancestor 核验通过）→ 取上游侧即保留 EU 修复 + 获得上游推进；我方无独有内容
+   需保留（EU 文件我方仅含 cherry-pick 副本）。
+2. subtitle.js：同上（EU-001 上游已含）。
+3. **KP-001 载体（YouTubeCaptionProvider.js 及其测试）例外**：`getStatusSnapshot()`
+   + `getYouTubeCaptionStatus()` + 快照测试是我方独有——"取上游侧"后必须
+   **re-apply KP-001 增量**（我方提交 7f73f3c 的精确 hunks 可直接复用）。
+4. Options/Subtitle.js：EU-001 上游已含 → 取上游侧。
+
+修订后解法仍为机械化操作，但 KP-001 载体两文件必须显式 re-apply——已列入
+UP-03 正式 sync 的执行清单。
