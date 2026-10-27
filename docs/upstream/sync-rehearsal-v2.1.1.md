@@ -72,3 +72,24 @@ EU-001/003/004 的上游原始提交（ca4ea90 / 02d362e / c95bd46）经
 
 修订后解法仍为机械化操作，但 KP-001 载体两文件必须显式 re-apply——已列入
 UP-03 正式 sync 的执行清单。
+
+## 追加深化的完整实证（2026-10-27 二轮）
+
+预演从"预扫描"推进到"**已验证解法**"：在临时 worktree 中实际构建
+合并提交（Kisu 全量 tip + P6 线 + v2.1.1，9 冲突按上述解法解决），
+并在合并树上完整运行 Kisu 套件：
+
+```
+Test Suites: 47 passed, 47 total
+Tests:       420 passed, 420 total
+```
+
+- KCL contracts（漂移网）、P2 boundary 语义、三核 round-trip、迁移矩阵——
+  全部在 v2.1.1 合并树上通过
+- KP-001 访问器存活确认（merged 树中 getStatusSnapshot/getYouTubeCaptionStatus
+  共 3 处引用 + KP-001 测试块已重接）
+- **UP-03 从"预演"升级为"已验证解法"**：正式 sync 的结果树与测试结果已实测，
+  剩余工作仅为 M2 启动后的正式分支化（UP-02 选型后）
+
+预演用中间对象（GitHub 上的临时 commit/tree：56e98353/75516ef1/c4a61ef6/
+1a980b59 与分支 tmp-up03-*）可留作 UP-03 的直接起点，或清理后重建。
