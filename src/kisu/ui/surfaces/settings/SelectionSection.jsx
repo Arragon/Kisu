@@ -2,7 +2,12 @@
 // projection map §3 五字段；provider 多选用 chips（aria-pressed，非空守卫在
 // product 层）；写入经 onUpdate(patch) → product 层 read-merge-write。
 import React from "react";
-import { Select, InlineStatus, useColorPalette } from "../../primitives";
+import {
+  Select,
+  InlineStatus,
+  useColorPalette,
+  useFocusRing,
+} from "../../primitives";
 import { space, type, radius } from "../../tokens/tokens";
 
 const TRIGGER_LABELS = Object.freeze({
@@ -17,6 +22,36 @@ const TRIGGER_LABELS = Object.freeze({
   select: "On select",
   dblclick: "Double click",
 });
+
+// aria-pressed 选择态 chip（Ink §4：radius.round 仅限此选择态）。
+// 独立组件持有 focus ring——每个实例自己的焦点态，不跨按钮共享。
+const ToggleChip = ({ selected, onClick, testId, style, children }) => {
+  const palette = useColorPalette();
+  const focus = useFocusRing(palette);
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onClick}
+      style={{
+        fontFamily: type.fontFamily,
+        fontSize: type.size.sm,
+        padding: `${space.xs}px ${space.sm}px`,
+        borderRadius: radius.round,
+        border: `1px solid ${selected ? palette.action.primary : palette.border.default}`,
+        backgroundColor: selected ? palette.action.primary : palette.bg.default,
+        color: selected ? palette.text.onAction : palette.text.primary,
+        cursor: "pointer",
+        ...focus.style,
+        ...style,
+      }}
+      {...focus.handlers}
+      data-testid={testId}
+    >
+      {children}
+    </button>
+  );
+};
 
 export const SelectionSection = ({
   setting,
@@ -65,30 +100,16 @@ export const SelectionSection = ({
           Providers (multi-select)
         </span>
         <div style={{ display: "flex", flexWrap: "wrap", gap: space.xs }}>
-          {providerOptions.map((p) => {
-            const selected = apiSlugs.includes(p.value);
-            return (
-              <button
-                key={p.value}
-                type="button"
-                aria-pressed={selected}
-                onClick={() => toggleProvider(p.value)}
-                style={{
-                  fontFamily: type.fontFamily,
-                  fontSize: type.size.sm,
-                  padding: `${space.xs}px ${space.sm}px`,
-                  borderRadius: radius.round,
-                  border: `1px solid ${selected ? palette.action.primary : palette.border.default}`,
-                  backgroundColor: selected ? palette.action.primary : palette.bg.default,
-                  color: selected ? palette.text.onAction : palette.text.primary,
-                  cursor: "pointer",
-                }}
-                data-testid={`kisu-selection-provider-${p.value}`}
-              >
-                {p.label}
-              </button>
-            );
-          })}
+          {providerOptions.map((p) => (
+            <ToggleChip
+              key={p.value}
+              selected={apiSlugs.includes(p.value)}
+              onClick={() => toggleProvider(p.value)}
+              testId={`kisu-selection-provider-${p.value}`}
+            >
+              {p.label}
+            </ToggleChip>
+          ))}
         </div>
       </div>
 
@@ -120,25 +141,14 @@ export const SelectionSection = ({
         <span style={{ fontSize: type.size.sm, fontWeight: type.weight.medium, color: palette.text.secondary }}>
           Single word
         </span>
-        <button
-          type="button"
-          aria-pressed={singleWordNoTrans}
+        <ToggleChip
+          selected={singleWordNoTrans}
           onClick={() => onUpdate && onUpdate({ singleWordNoTrans: !singleWordNoTrans })}
-          style={{
-            alignSelf: "flex-start",
-            fontFamily: type.fontFamily,
-            fontSize: type.size.sm,
-            padding: `${space.xs}px ${space.sm}px`,
-            borderRadius: radius.round,
-            border: `1px solid ${singleWordNoTrans ? palette.action.primary : palette.border.default}`,
-            backgroundColor: singleWordNoTrans ? palette.action.primary : palette.bg.default,
-            color: singleWordNoTrans ? palette.text.onAction : palette.text.primary,
-            cursor: "pointer",
-          }}
-          data-testid="kisu-selection-single-word"
+          testId="kisu-selection-single-word"
+          style={{ alignSelf: "flex-start" }}
         >
           {singleWordNoTrans ? "Dictionary only" : "Translate and look up"}
-        </button>
+        </ToggleChip>
       </div>
 
       <InlineStatus tone="info">Applies from the next selection</InlineStatus>

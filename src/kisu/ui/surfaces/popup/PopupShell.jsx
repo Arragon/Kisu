@@ -42,6 +42,9 @@ const ShellFrame = ({ title, viewModel, onClose, children }) => {
         gap: space.sm,
         padding: space.md,
         fontFamily: type.fontFamily,
+        // 挂载即 programmatic focus（frame 不在 Tab 序）：抑制原生 outline，
+        // 焦点可见性由各控件的 token focus-ring 承担（DES-10 Gate 返工项）
+        outline: "none",
       }}
     >
       <header

@@ -1,7 +1,8 @@
 // Semantic Select（MVP-14）：原生 select——键盘/焦点语义免费且最可靠。
 // tokens 提供字体与颜色；option 由调用方传入 [{ value, label }]。
+// DES-09：与其余 primitives 一致的 token 化 focus-ring（键盘可达性统一）。
 import React from "react";
-import { useColorPalette } from "./mode";
+import { useColorPalette, useFocusRing } from "./mode";
 import { space, type, radius } from "../tokens/tokens";
 
 export const Select = ({
@@ -14,6 +15,7 @@ export const Select = ({
   ...rest
 }) => {
   const palette = useColorPalette();
+  const focus = useFocusRing(palette);
   return (
     <select
       aria-label={ariaLabel}
@@ -30,8 +32,10 @@ export const Select = ({
         border: `1px solid ${palette.border.strong}`,
         padding: `${space.xs}px ${space.sm}px`,
         cursor: disabled ? "default" : "pointer",
+        ...focus.style,
         ...style,
       }}
+      {...focus.handlers}
       {...rest}
     >
       {options.map((option) => (

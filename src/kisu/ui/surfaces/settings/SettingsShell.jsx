@@ -4,11 +4,18 @@
 //（选择与焦点同步）。Advanced section 挂 legacy 入口占位（真实导航归 entry）。
 // 各 section 内容（MVP-49..53/60）由调用方以 {id, content} 注入。
 import React, { useRef, useState } from "react";
-import { ModeProvider, useColorPalette, Surface, Button } from "../../primitives";
+import {
+  ModeProvider,
+  useColorPalette,
+  useFocusRing,
+  Surface,
+  Button,
+} from "../../primitives";
 import { sectionLabel, SETTINGS_SECTION_IDS } from "./sections";
 import { space, type, radius } from "../../tokens/tokens";
 
 const NavItem = ({ palette, section, active, onSelect, registerRef }) => {
+  const focus = useFocusRing(palette);
   return (
     <button
       type="button"
@@ -27,7 +34,9 @@ const NavItem = ({ palette, section, active, onSelect, registerRef }) => {
         color: active ? palette.text.primary : palette.text.secondary,
         fontWeight: active ? type.weight.medium : type.weight.regular,
         cursor: "pointer",
+        ...focus.style,
       }}
+      {...focus.handlers}
     >
       {sectionLabel(section.id)}
     </button>

@@ -3,7 +3,12 @@
 // （setTargetLanguage/setProvider/setDisplayMode 经 PUTRULE），round-trip 一致性
 // 由共享 controller 保证。provider 选项来自 view-model 的注册表投影（#20 同款）。
 import React from "react";
-import { Select, InlineStatus, useColorPalette } from "../../primitives";
+import {
+  Select,
+  InlineStatus,
+  useColorPalette,
+  useFocusRing,
+} from "../../primitives";
 import { space, type, radius } from "../../tokens/tokens";
 
 const MODE_OPTIONS = Object.freeze([
@@ -19,6 +24,36 @@ const toPatch = (modeValue) =>
   modeValue === "translated"
     ? { onlyTranslation: true }
     : { onlyTranslation: false, order: modeValue };
+
+// aria-pressed 模式 chip（Ink §4：radius.round 仅限选择态）。独立组件持有
+// focus ring——每个实例自己的焦点态，不跨按钮共享。
+const ModeChip = ({ selected, disabled, onClick, testId, children }) => {
+  const palette = useColorPalette();
+  const focus = useFocusRing(palette);
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      disabled={disabled}
+      onClick={onClick}
+      style={{
+        fontFamily: type.fontFamily,
+        fontSize: type.size.sm,
+        padding: `${space.xs}px ${space.sm}px`,
+        borderRadius: radius.round,
+        border: `1px solid ${selected ? palette.action.primary : palette.border.default}`,
+        backgroundColor: selected ? palette.action.primary : palette.bg.default,
+        color: selected ? palette.text.onAction : palette.text.primary,
+        cursor: disabled ? "default" : "pointer",
+        ...focus.style,
+      }}
+      {...focus.handlers}
+      data-testid={testId}
+    >
+      {children}
+    </button>
+  );
+};
 
 export const PageSection = ({
   viewModel,
@@ -96,33 +131,19 @@ export const PageSection = ({
           Display
         </span>
         <div style={{ display: "flex", flexWrap: "wrap", gap: space.xs }}>
-          {MODE_OPTIONS.map((option) => {
-            const selected = toModeValue(displayMode) === option.value;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                aria-pressed={selected}
-                disabled={!viewModel.can.changeDisplayMode}
-                onClick={() =>
-                  actions.setDisplayMode && actions.setDisplayMode(toPatch(option.value))
-                }
-                style={{
-                  fontFamily: type.fontFamily,
-                  fontSize: type.size.sm,
-                  padding: `${space.xs}px ${space.sm}px`,
-                  borderRadius: radius.round,
-                  border: `1px solid ${selected ? palette.action.primary : palette.border.default}`,
-                  backgroundColor: selected ? palette.action.primary : palette.bg.default,
-                  color: selected ? palette.text.onAction : palette.text.primary,
-                  cursor: viewModel.can.changeDisplayMode ? "pointer" : "default",
-                }}
-                data-testid={`kisu-page-mode-${option.value}`}
-              >
-                {option.label}
-              </button>
-            );
-          })}
+          {MODE_OPTIONS.map((option) => (
+            <ModeChip
+              key={option.value}
+              selected={toModeValue(displayMode) === option.value}
+              disabled={!viewModel.can.changeDisplayMode}
+              onClick={() =>
+                actions.setDisplayMode && actions.setDisplayMode(toPatch(option.value))
+              }
+              testId={`kisu-page-mode-${option.value}`}
+            >
+              {option.label}
+            </ModeChip>
+          ))}
         </div>
       </div>
     </div>
