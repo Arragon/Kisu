@@ -1,7 +1,7 @@
-// Neutral Popup shell（MVP-16 / INH-1157）。
-// 仅用于功能开发的容器：只依赖 primitives 与 tokens，消费 #14 冻结的 view-model
-// 约定。不做品牌级 polish；最终视觉被推翻时只改本文件（tokens/primitives 层），
-// 不触碰 controller/KCL。
+// Neutral Popup shell（MVP-16 / INH-1157；DES-05 正式构图）。
+// 只依赖 primitives 与 tokens，消费 #14 冻结的 view-model 约定。视觉遵循
+// docs/design/DESIGN-DIRECTION.md（Ink）：发丝线分层、md+strong 标题；
+// 再推翻时只改本文件（tokens/primitives 层），不触碰 controller/KCL。
 import React, { useEffect, useRef } from "react";
 import {
   ModeProvider,
@@ -13,8 +13,7 @@ import {
 import { describeError } from "../errorHints";
 import { space, type } from "../../tokens/tokens";
 
-// 典型扩展 Popup 宽度（与上游 Popup 同宽）。视觉值允许存在于 surface 层；
-// 正式 tokens 化留给 Design Freedom Gate。
+// 典型扩展 Popup 宽度（与上游 Popup 同宽）。视觉值允许存在于 surface 层。
 const POPUP_WIDTH_PX = 360;
 
 const ShellFrame = ({ title, viewModel, onClose, children }) => {
@@ -50,11 +49,14 @@ const ShellFrame = ({ title, viewModel, onClose, children }) => {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          // Ink 构图：发丝线分层（DESIGN-DIRECTION §6），标题降为 md+strong
+          borderBottom: `1px solid ${palette.border.default}`,
+          paddingBottom: space.sm,
         }}
       >
         <span
           style={{
-            fontSize: type.size.lg,
+            fontSize: type.size.md,
             fontWeight: type.weight.strong,
             color: palette.text.primary,
           }}

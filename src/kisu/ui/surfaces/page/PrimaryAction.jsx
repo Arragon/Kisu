@@ -45,13 +45,17 @@ export const PrimaryAction = ({ viewModel, onTranslate, onStop }) => {
       onClick={invoke}
       onKeyDown={onKeyDown}
       aria-busy={loading || undefined}
+      // Ink 构图：每屏唯一强调元素，全宽（DESIGN-DIRECTION §6）
+      style={{ width: "100%" }}
     >
       {loading ? "Translate…" : active ? "Stop" : "Translate"}
     </Button>
   );
 
   return blockedReason && !active ? (
-    <Tooltip label={blockedReason}>{button}</Tooltip>
+    <Tooltip label={blockedReason} style={{ width: "100%" }}>
+      {button}
+    </Tooltip>
   ) : (
     button
   );
