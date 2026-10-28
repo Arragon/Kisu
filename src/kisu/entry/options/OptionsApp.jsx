@@ -153,7 +153,7 @@ export const OptionsApp = ({ dependencies, mode = "light", colorSet = null }) =>
         <InlineStatus tone="info">
           {`Theme follows the General darkMode setting ("${
             general ? general.darkMode : "auto"
-          }"). Visual style is provisional until the Design Freedom Gate.`}
+          }"). Visual style follows the frozen Ink direction (docs/design/DESIGN-DIRECTION.md).`}
         </InlineStatus>
       ),
     },
@@ -178,7 +178,9 @@ export const OptionsApp = ({ dependencies, mode = "light", colorSet = null }) =>
     },
   ];
 
-  return <SettingsShell sections={sections} onOpenLegacy={onOpenLegacy} mode={mode} colorSet={colorSet} />;
+  // onOpenLegacy 不传给 shell：Advanced/Services section 已自带 legacy 入口，
+  // shell 的 fallback 入口仅留给未注入 section 级入口的调用方（避免双按钮）。
+  return <SettingsShell sections={sections} mode={mode} colorSet={colorSet} />;
 };
 
 export const mountOptionsApp = ({

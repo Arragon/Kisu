@@ -79,7 +79,7 @@ export const PageSection = ({
           onChange={(next) => actions.setProvider && actions.setProvider(next)}
         />
         {!providerAvailable && provider.apiSlug && (
-          <InlineStatus tone="warning">
+          <InlineStatus tone="warning" style={{ overflowWrap: "anywhere" }}>
             {`Service "${provider.apiSlug}" is no longer available — pick another`}
           </InlineStatus>
         )}

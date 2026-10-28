@@ -39,8 +39,8 @@ export const GeneralSection = ({ setting, uiLangOptions, onUpdate }) => {
           value={uiLang}
           onChange={(next) => onUpdate && onUpdate({ uiLang: next })}
         />
-        {uiLangRaw && uiLangRaw !== uiLang && (
-          <InlineStatus tone="info">
+                {uiLangRaw && uiLangRaw !== uiLang && (
+          <InlineStatus tone="info" style={{ overflowWrap: "anywhere" }}>
             {`Unknown language code "${uiLangRaw}" — using the default`}
           </InlineStatus>
         )}
@@ -56,7 +56,7 @@ export const GeneralSection = ({ setting, uiLangOptions, onUpdate }) => {
         >
           Appearance
         </span>
-        <InlineStatus tone="info">
+        <InlineStatus tone="info" style={{ overflowWrap: "anywhere" }}>
           {`Theme follows "${darkMode}" (light / dark / auto) — colors come from the design tokens`}
         </InlineStatus>
       </div>

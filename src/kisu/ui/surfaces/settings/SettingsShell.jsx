@@ -94,7 +94,13 @@ export const SettingsShell = ({
             />
           ))}
         </nav>
-        <Surface padding="lg" style={{ flex: 1, minWidth: 0 }} data-testid="kisu-settings-content">
+        {/* Ink 构图：内容区是有界容器（1px 发丝线），与左列导航线条分层 */}
+        <Surface
+          padding="lg"
+          bordered
+          style={{ flex: 1, minWidth: 0 }}
+          data-testid="kisu-settings-content"
+        >
           {active ? active.content : null}
           {active && active.id === "advanced" && typeof onOpenLegacy === "function" && (
             <div style={{ marginTop: space.md }}>
