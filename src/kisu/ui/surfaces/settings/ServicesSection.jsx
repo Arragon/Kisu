@@ -4,7 +4,7 @@
 // 永不出现 credential 字段（测试断言）。
 import React from "react";
 import { InlineStatus, Button, useColorPalette } from "../../primitives";
-import { space, type } from "../../tokens/tokens";
+import { space, type, radius } from "../../tokens/tokens";
 
 export const ServicesSection = ({ providers, onOpenLegacy }) => {
   const palette = useColorPalette();
@@ -46,7 +46,7 @@ export const ServicesSection = ({ providers, onOpenLegacy }) => {
               gap: space.sm,
               padding: `${space.xs}px ${space.sm}px`,
               border: `1px solid ${palette.border.default}`,
-              borderRadius: 8,
+              borderRadius: radius.md,
             }}
           >
             <span
