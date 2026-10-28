@@ -10,7 +10,7 @@
 import React from "react";
 import { InlineStatus, useColorPalette } from "../../primitives";
 import { describeError } from "../errorHints";
-import { space } from "../../tokens/tokens";
+import { space, type } from "../../tokens/tokens";
 
 const SUBTITLE_ERROR_LINES = {
   TRANSPORT_UNAVAILABLE: "Subtitle settings are unreachable — the panel will retry.",
@@ -68,12 +68,18 @@ export const SubtitleStatus = ({ viewModel }) => {
       style={{ display: "flex", flexDirection: "column", gap: space.xs }}
     >
       {rows.map((row) => (
-        <InlineStatus key={row.key} tone={row.tone} data-testid={`kisu-subtitle-row-${row.key}`}>
+        <InlineStatus
+          key={row.key}
+          tone={row.tone}
+          data-testid={`kisu-subtitle-row-${row.key}`}
+          // 长反馈文案安全：可换行、不遮挡播放器（DESIGN-DIRECTION §6）
+          style={{ overflowWrap: "anywhere" }}
+        >
           {row.text}
         </InlineStatus>
       ))}
       {process.env.NODE_ENV !== "production" && error && (
-        <span style={{ fontSize: 12, color: palette.text.disabled }}>
+        <span style={{ fontSize: type.size.sm, color: palette.text.disabled }}>
           {`debug: ${error.code}`}
         </span>
       )}

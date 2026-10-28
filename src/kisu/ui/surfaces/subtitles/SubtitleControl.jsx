@@ -11,7 +11,12 @@ export const SubtitleControl = ({ viewModel, actions, children }) => {
   if (!viewModel.data) {
     if (viewModel.error) {
       return (
-        <InlineStatus tone="error" data-testid="kisu-subtitle-error">
+        <InlineStatus
+          tone="error"
+          data-testid="kisu-subtitle-error"
+          // 长错误文案安全：可换行、不遮挡播放器（DESIGN-DIRECTION §6）
+          style={{ overflowWrap: "anywhere" }}
+        >
           {`${viewModel.error.code}: ${viewModel.error.message}`}
         </InlineStatus>
       );
@@ -58,6 +63,8 @@ export const SubtitleControl = ({ viewModel, actions, children }) => {
           variant={enabled ? "secondary" : "primary"}
           onClick={() => actions.setEnabled && actions.setEnabled(!enabled)}
           data-testid="kisu-subtitle-toggle"
+          // 播放器内面板紧凑档：xs/sm 内边距（DESIGN-DIRECTION §2 compactness）
+          style={{ padding: `${space.xs}px ${space.sm}px` }}
         >
           {enabled ? "Disable" : "Enable"}
         </Button>

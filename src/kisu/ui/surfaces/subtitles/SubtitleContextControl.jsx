@@ -57,6 +57,8 @@ export const SubtitleContextControl = ({ viewModel, onSetContextMode }) => {
         <InlineStatus
           tone={broken ? "warning" : "info"}
           data-testid="kisu-subtitle-context-reason"
+          // capability 原因 verbatim 呈现（真实性不变），长文案可换行
+          style={{ overflowWrap: "anywhere" }}
         >
           {context.capability.reason || "Not available"}
         </InlineStatus>

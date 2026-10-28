@@ -43,7 +43,7 @@ export const SubtitleLanguageControl = ({
         onChange={(next) => onSetTargetLanguage && onSetTargetLanguage(next)}
       />
       {!known && (
-        <InlineStatus tone="info">
+        <InlineStatus tone="info" style={{ overflowWrap: "anywhere" }}>
           {`Unknown language code "${raw}" — using the default`}
         </InlineStatus>
       )}
