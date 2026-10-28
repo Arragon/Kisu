@@ -49,8 +49,9 @@ const semanticSignature = (obj) =>
   );
 
 describe("tokens contract namespaces (MVP-13)", () => {
-  it("is explicitly provisional until the Design Freedom Gate", () => {
-    expect(TOKEN_STATUS).toBe("provisional");
+  it("status reflects DES-03 convergence to the user-chosen Ink direction", () => {
+    // DES-02 用户选 Ink（黑白极简），DES-03 转正；DES-10 终验后移除收敛标记
+    expect(TOKEN_STATUS).toBe("ink-converged");
   });
 
   it("defines every required namespace with semantic keys", () => {
