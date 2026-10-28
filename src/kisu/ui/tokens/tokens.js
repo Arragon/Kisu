@@ -8,66 +8,67 @@
 // 3. 替换 token 值不得改变产品语义——语义在键名，不在值。
 // 4. 不把任何外部产品（Linear/Arc/Material…）的样式写成架构约束。
 
-// 显式 provisional 标记：Design Freedom Gate 冻结正式 tokens 时移除。
-export const TOKEN_STATUS = "provisional";
+// DES-02 用户已选 Ink（黑白极简）方向，DES-03 已将 Ink 色板转正为默认；
+// 其余三方向保留于 directions.js 作探索记录。DES-10 用户终验后移除收敛标记。
+export const TOKEN_STATUS = "ink-converged"; // DES-02 用户选 Ink（黑白极简），DES-03 已转正；DES-10 用户终验后移除标记
 
 const lightPalette = Object.freeze({
   bg: Object.freeze({
     default: "#ffffff",
-    subtle: "#f5f7f9",
-    inverse: "#1f2430",
+    subtle: "#f2f2f2",
+    inverse: "#111111",
   }),
   text: Object.freeze({
-    primary: "#1a2129",
-    secondary: "#4a5561",
-    disabled: "#8a94a0",
-    inverse: "#f5f7f9",
+    primary: "#111111",
+    secondary: "#444444",
+    disabled: "#999999",
+    inverse: "#ffffff",
     onAction: "#ffffff",
   }),
   border: Object.freeze({
-    default: "#d4dae0",
-    strong: "#7c8894",
+    default: "#dddddd",
+    strong: "#555555",
   }),
   action: Object.freeze({
-    primary: "#1a56db",
-    hover: "#164bb3",
-    active: "#123c91",
+    primary: "#111111",
+    hover: "#000000",
+    active: "#000000",
   }),
   status: Object.freeze({
-    info: Object.freeze({ fg: "#1a4d8f", bg: "#e8f1fd" }),
-    success: Object.freeze({ fg: "#1c5c34", bg: "#e6f4ea" }),
-    warning: Object.freeze({ fg: "#7a4d0f", bg: "#fdf3e0" }),
-    error: Object.freeze({ fg: "#a12622", bg: "#fdeceb" }),
+    info: Object.freeze({ fg: "#1f2937", bg: "#f3f4f6" }),
+    success: Object.freeze({ fg: "#166534", bg: "#dcfce7" }),
+    warning: Object.freeze({ fg: "#854d0e", bg: "#fef9c3" }),
+    error: Object.freeze({ fg: "#991b1b", bg: "#fee2e2" }),
   }),
 });
 
 const darkPalette = Object.freeze({
   bg: Object.freeze({
-    default: "#14181f",
-    subtle: "#1d232c",
-    inverse: "#f5f7f9",
+    default: "#0a0a0a",
+    subtle: "#151515",
+    inverse: "#fafafa",
   }),
   text: Object.freeze({
-    primary: "#eceff3",
-    secondary: "#a8b2bd",
-    disabled: "#5d6773",
-    inverse: "#1a2129",
-    onAction: "#0b2d6b",
+    primary: "#fafafa",
+    secondary: "#bfbfbf",
+    disabled: "#666666",
+    inverse: "#0a0a0a",
+    onAction: "#0a0a0a",
   }),
   border: Object.freeze({
-    default: "#333c46",
-    strong: "#6b7784",
+    default: "#2a2a2a",
+    strong: "#8a8a8a",
   }),
   action: Object.freeze({
-    primary: "#82adff",
-    hover: "#9cc0ff",
-    active: "#6b9bf0",
+    primary: "#fafafa",
+    hover: "#ffffff",
+    active: "#d4d4d4",
   }),
   status: Object.freeze({
-    info: Object.freeze({ fg: "#9ec2ff", bg: "#12294a" }),
-    success: Object.freeze({ fg: "#8fd6a8", bg: "#10331f" }),
-    warning: Object.freeze({ fg: "#f0c37e", bg: "#3a2c10" }),
-    error: Object.freeze({ fg: "#ff9d99", bg: "#3d1517" }),
+    info: Object.freeze({ fg: "#d4d4d4", bg: "#1f1f1f" }),
+    success: Object.freeze({ fg: "#d4d4d4", bg: "#1f1f1f" }),
+    warning: Object.freeze({ fg: "#d4d4d4", bg: "#1f1f1f" }),
+    error: Object.freeze({ fg: "#d4d4d4", bg: "#262626" }),
   }),
 });
 
