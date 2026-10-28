@@ -37,8 +37,10 @@
 
 ## 5. 动效（Motion）
 
-- **零动效**：全部 duration = 0，easing = linear。状态切换即时呈现；
-  `prefers-reduced-motion` 天然满足（DES-09 复核，无额外分支）。
+- **零动效**：全部 duration = 0，easing = linear。状态切换即时呈现。
+- reduced-motion 复核（DES-09）：**结构性满足**——`ui/` 不存在任何
+  transition/animation/@keyframes（`a11yBoundary.test.js` 持续强制），
+  `prefers-reduced-motion` 用户无需额外分支。
 
 ## 6. 构图与层级（Composition / Hierarchy）
 

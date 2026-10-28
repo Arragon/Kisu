@@ -4,8 +4,8 @@
 // （Select 发 slug，重排序与写盘经 KCL setSelectionProviders，凭据不经过 surface）。
 // pronunciation/favorite 无 KCL 支撑，can 未定义即不出现在 V0.1（can 驱动的直接后果）。
 import React from "react";
-import { Select, useColorPalette } from "../../primitives";
-import { space, type } from "../../tokens/tokens";
+import { Select, useColorPalette, useFocusRing } from "../../primitives";
+import { space, type, radius } from "../../tokens/tokens";
 
 const copyableText = (data) => {
   const result = data.result;
@@ -24,6 +24,33 @@ const copyableText = (data) => {
     lines.push(payload.detail);
   }
   return lines.join("\n");
+};
+
+// 静默文字动作（Ink：内容是强调元素，动作保持安静档）。独立组件持有
+// focus ring——每个实例自己的焦点态。
+const QuietAction = ({ onClick, testId, palette, children }) => {
+  const focus = useFocusRing(palette);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        fontFamily: type.fontFamily,
+        fontSize: type.size.sm,
+        color: palette.text.secondary,
+        background: "transparent",
+        border: "none",
+        cursor: "pointer",
+        padding: space.xs,
+        borderRadius: radius.sm,
+        ...focus.style,
+      }}
+      {...focus.handlers}
+      data-testid={testId}
+    >
+      {children}
+    </button>
+  );
 };
 
 export const ActionRow = ({
@@ -71,23 +98,9 @@ export const ActionRow = ({
       style={{ display: "flex", gap: space.sm, alignItems: "center" }}
     >
       {items.map((item) => (
-        <button
-          key={item.key}
-          type="button"
-          onClick={item.run}
-          style={{
-            fontFamily: type.fontFamily,
-            fontSize: type.size.sm,
-            color: palette.text.secondary,
-            background: "transparent",
-            border: "none",
-            cursor: "pointer",
-            padding: space.xs,
-          }}
-          data-testid={`kisu-action-${item.key}`}
-        >
+        <QuietAction key={item.key} onClick={item.run} testId={`kisu-action-${item.key}`} palette={palette}>
           {item.label}
-        </button>
+        </QuietAction>
       ))}
       {showProvider && (
         <Select

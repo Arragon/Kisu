@@ -1,4 +1,4 @@
-export { ModeProvider, useMode, useColorPalette } from "./mode";
+export { ModeProvider, useMode, useColorPalette, useFocusRing } from "./mode";
 export { Button } from "./Button";
 export { IconButton } from "./IconButton";
 export { SegmentedControl } from "./SegmentedControl";
