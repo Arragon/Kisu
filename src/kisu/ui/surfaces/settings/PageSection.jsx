@@ -4,7 +4,7 @@
 // 由共享 controller 保证。provider 选项来自 view-model 的注册表投影（#20 同款）。
 import React from "react";
 import { Select, InlineStatus, useColorPalette } from "../../primitives";
-import { space, type } from "../../tokens/tokens";
+import { space, type, radius } from "../../tokens/tokens";
 
 const MODE_OPTIONS = Object.freeze([
   Object.freeze({ value: "original-first", label: "Bilingual · Original first" }),
@@ -111,7 +111,7 @@ export const PageSection = ({
                   fontFamily: type.fontFamily,
                   fontSize: type.size.sm,
                   padding: `${space.xs}px ${space.sm}px`,
-                  borderRadius: 999,
+                  borderRadius: radius.round,
                   border: `1px solid ${selected ? palette.action.primary : palette.border.default}`,
                   backgroundColor: selected ? palette.action.primary : palette.bg.default,
                   color: selected ? palette.text.onAction : palette.text.primary,

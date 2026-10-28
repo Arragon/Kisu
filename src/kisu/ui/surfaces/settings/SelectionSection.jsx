@@ -3,7 +3,7 @@
 // product 层）；写入经 onUpdate(patch) → product 层 read-merge-write。
 import React from "react";
 import { Select, InlineStatus, useColorPalette } from "../../primitives";
-import { space, type } from "../../tokens/tokens";
+import { space, type, radius } from "../../tokens/tokens";
 
 const TRIGGER_LABELS = Object.freeze({
   mk_pagescroll: "Smart scroll",
@@ -77,7 +77,7 @@ export const SelectionSection = ({
                   fontFamily: type.fontFamily,
                   fontSize: type.size.sm,
                   padding: `${space.xs}px ${space.sm}px`,
-                  borderRadius: 999,
+                  borderRadius: radius.round,
                   border: `1px solid ${selected ? palette.action.primary : palette.border.default}`,
                   backgroundColor: selected ? palette.action.primary : palette.bg.default,
                   color: selected ? palette.text.onAction : palette.text.primary,
@@ -129,7 +129,7 @@ export const SelectionSection = ({
             fontFamily: type.fontFamily,
             fontSize: type.size.sm,
             padding: `${space.xs}px ${space.sm}px`,
-            borderRadius: 999,
+            borderRadius: radius.round,
             border: `1px solid ${singleWordNoTrans ? palette.action.primary : palette.border.default}`,
             backgroundColor: singleWordNoTrans ? palette.action.primary : palette.bg.default,
             color: singleWordNoTrans ? palette.text.onAction : palette.text.primary,

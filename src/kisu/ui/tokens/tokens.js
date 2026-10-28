@@ -103,8 +103,8 @@ export const type = Object.freeze({
 
 export const radius = Object.freeze({
   none: 0,
-  sm: 4,
-  md: 8,
+  sm: 2,
+  md: 4,
   round: 999,
 });
 
@@ -118,13 +118,13 @@ export const elevation = Object.freeze({
 export const motion = Object.freeze({
   durationMs: Object.freeze({
     instant: 0,
-    fast: 120,
-    normal: 200,
-    slow: 320,
+    fast: 0,
+    normal: 0,
+    slow: 0,
   }),
   easing: Object.freeze({
-    standard: "cubic-bezier(0.2, 0, 0, 1)",
-    decelerate: "cubic-bezier(0.05, 0.7, 0.1, 1)",
+    standard: "linear",
+    decelerate: "linear",
   }),
 });
 
