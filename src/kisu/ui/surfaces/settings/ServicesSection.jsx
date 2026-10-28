@@ -53,6 +53,8 @@ export const ServicesSection = ({ providers, onOpenLegacy }) => {
               style={{
                 fontSize: type.size.md,
                 color: palette.text.primary,
+                // 长 provider 名/本地化文案安全：可换行不撑破列表行
+                overflowWrap: "anywhere",
               }}
             >
               {provider.name}

@@ -31,11 +31,13 @@ export const AdvancedSection = ({ onOpenLegacy }) => {
       data-testid="kisu-settings-advanced"
       style={{ display: "flex", flexDirection: "column", gap: space.md }}
     >
-      <InlineStatus tone="info">
+      <InlineStatus tone="info" style={{ overflowWrap: "anywhere" }}>
         Everything below lives in the legacy settings — Kisu does not hide or
         duplicate it.
       </InlineStatus>
+      {/* escape hatch 是本 section 唯一强调动作（Ink §6：每屏一个强调元素） */}
       <Button
+        variant="primary"
         onClick={onOpenLegacy}
         disabled={typeof onOpenLegacy !== "function"}
         data-testid="kisu-advanced-open-legacy"

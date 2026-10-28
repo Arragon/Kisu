@@ -144,7 +144,11 @@ export const OnboardingWizard = ({
           {isDone ? "Setup complete" : `Step ${stepIndex + 1} of 3`}
         </span>
         <StepBody view={view} choice={choice} setChoice={setChoice} options={{ language: languageOptions, service: serviceOptions }} error={error} />
-        {error && <InlineStatus tone="error">{`${error.code}: ${error.message}`}</InlineStatus>}
+        {error && (
+          <InlineStatus tone="error" style={{ overflowWrap: "anywhere" }}>
+            {`${error.code}: ${error.message}`}
+          </InlineStatus>
+        )}
         {!isDone && (
           <div style={{ display: "flex", gap: space.sm }}>
             {stepIndex > 0 && (
