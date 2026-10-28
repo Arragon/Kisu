@@ -95,7 +95,8 @@ export const ActionRow = ({
           options={providers.map((p) => ({ value: p.apiSlug, label: p.name }))}
           value={currentProvider ? currentProvider.apiSlug : ""}
           onChange={(slug) => onSetProvider && onSetProvider(slug)}
-          style={{ fontSize: type.size.sm }}
+          // 长 provider 名称安全：select 可收缩、不顶开动作行（DESIGN-DIRECTION §6）
+          style={{ fontSize: type.size.sm, minWidth: 0, maxWidth: "100%" }}
         />
       )}
     </div>

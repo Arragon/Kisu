@@ -24,7 +24,12 @@ export const SentenceResult = ({ viewModel }) => {
 
   if (viewModel.error) {
     return (
-      <InlineStatus tone="error" data-testid="kisu-sentence-error">
+      <InlineStatus
+        tone="error"
+        data-testid="kisu-sentence-error"
+        // 长错误文案安全：可换行、不横向溢出 overlay（DESIGN-DIRECTION §6）
+        style={{ overflowWrap: "anywhere" }}
+      >
         {describeError(viewModel.error)}
       </InlineStatus>
     );
