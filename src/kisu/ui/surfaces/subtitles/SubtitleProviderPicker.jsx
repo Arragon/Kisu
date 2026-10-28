@@ -42,7 +42,7 @@ export const SubtitleProviderPicker = ({ viewModel, onSetProvider }) => {
         onChange={(next) => onSetProvider && onSetProvider(next)}
       />
       {!currentAvailable && provider.apiSlug && (
-        <InlineStatus tone="warning">
+        <InlineStatus tone="warning" style={{ overflowWrap: "anywhere" }}>
           {`Provider "${provider.apiSlug}" is no longer available — pick another`}
         </InlineStatus>
       )}
