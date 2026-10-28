@@ -44,13 +44,16 @@ export const PageProviderPicker = ({
           value={value}
           disabled={disabled || options.length === 0}
           onChange={(next) => onSetProvider && onSetProvider(next)}
+          // Ink 构图：Select 与伴随按钮同行时 Select 吃满剩余宽度（长名称安全，
+          // DESIGN-DIRECTION §6）
+          style={{ flex: 1, minWidth: 0 }}
         />
         <Button disabled={disabled} onClick={onManageServices}>
           Manage…
         </Button>
       </div>
       {!currentAvailable && provider.apiSlug && (
-        <InlineStatus tone="warning">
+        <InlineStatus tone="warning" style={{ overflowWrap: "anywhere" }}>
           {`Provider "${provider.apiSlug}" is no longer available — pick another or manage services`}
         </InlineStatus>
       )}

@@ -43,14 +43,15 @@ export const SitePreferenceAction = ({
       >
         This site
       </span>
+      {/* Ink 构图：等权动作均分一行（DESIGN-DIRECTION §6） */}
       <div style={{ display: "flex", gap: space.sm }}>
-        <Button disabled={disabled} onClick={() => run("auto")}>
+        <Button disabled={disabled} style={{ flex: 1 }} onClick={() => run("auto")}>
           Always translate
         </Button>
-        <Button disabled={disabled} onClick={() => run("never")}>
+        <Button disabled={disabled} style={{ flex: 1 }} onClick={() => run("never")}>
           Never
         </Button>
-        <Button disabled={disabled} onClick={() => run("clear")}>
+        <Button disabled={disabled} style={{ flex: 1 }} onClick={() => run("clear")}>
           Reset
         </Button>
       </div>

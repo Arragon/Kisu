@@ -37,7 +37,10 @@ export const PageStatus = ({ viewModel }) => {
   }
   return (
     <div data-testid="kisu-page-status" style={{ display: "flex", flexDirection: "column", gap: space.xs }}>
-      <InlineStatus tone={tone}>{text}</InlineStatus>
+      {/* 长错误文案安全：可换行、不横向溢出 360px（DESIGN-DIRECTION §6） */}
+      <InlineStatus tone={tone} style={{ overflowWrap: "anywhere" }}>
+        {text}
+      </InlineStatus>
       {viewModel.error && process.env.NODE_ENV !== "production" && (
         <span
           style={{
