@@ -20,6 +20,10 @@ export const APP_CONSTS = {
 // 当前应用的版本，按点号拆分成数组 (例如: "1.0.2" -> ["1", "0", "2"])
 export const APP_VERSION = process.env.REACT_APP_VERSION.split(".");
 
+// Preferred content width when opening a new separate window.
+// Saved windows and user resizing remain free to use the full available width.
+export const SEPARATE_WINDOW_CONTENT_WIDTH = 720;
+
 // 主题模式常量
 export const THEME_LIGHT = "light"; // 浅色模式
 export const THEME_DARK = "dark"; // 深色模式

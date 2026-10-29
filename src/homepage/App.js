@@ -454,28 +454,47 @@ function VideoShowcase({ content, tokens }) {
             key={videoId}
             elevation={0}
             sx={{
-              position: "relative",
-              aspectRatio: "16 / 9",
               overflow: "hidden",
               border: `1px solid ${tokens.border}`,
               bgcolor: tokens.panel,
             }}
           >
-            <Box
-              component="iframe"
-              src={`https://www.youtube-nocookie.com/embed/${videoId}`}
-              title={`${content.videoLabel} ${index + 1}`}
-              loading="lazy"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
+            <Box sx={{ position: "relative", aspectRatio: "16 / 9" }}>
+              <Box
+                component="iframe"
+                src={`https://www.youtube.com/embed/${videoId}`}
+                title={`${content.videoLabel} ${index + 1}`}
+                loading="lazy"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+                sx={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  border: 0,
+                }}
+              />
+            </Box>
+            <Link
+              href={`https://www.youtube.com/watch?v=${videoId}`}
+              {...externalLinkProps}
               sx={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                border: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 0.75,
+                px: 2,
+                py: 1.25,
+                borderTop: `1px solid ${tokens.border}`,
+                fontWeight: 700,
+                textDecoration: "none",
               }}
-            />
+            >
+              {content.watchOnYouTube}
+              <OpenInNewIcon fontSize="small" />
+            </Link>
           </Card>
         ))}
       </Box>

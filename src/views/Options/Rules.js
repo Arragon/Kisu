@@ -1,6 +1,8 @@
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
+import InputAdornment from "@mui/material/InputAdornment";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import CodeField from "./CodeField";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -19,7 +21,7 @@ import {
   OPT_SPLIT_PARAGRAPH_ALL,
   OPT_HIGHLIGHT_WORDS_ALL,
 } from "../../config";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useI18n } from "../../hooks/I18n";
 import Typography from "@mui/material/Typography";
 import Accordion from "@mui/material/Accordion";
@@ -38,11 +40,11 @@ import Radio from "@mui/material/Radio";
 import RadioGroup from "@mui/material/RadioGroup";
 import DeleteIcon from "@mui/icons-material/Delete";
 import IconButton from "@mui/material/IconButton";
+import LoadingButton from "@mui/lab/LoadingButton";
 import ShareIcon from "@mui/icons-material/Share";
 import SyncIcon from "@mui/icons-material/Sync";
 import { useSubRules } from "../../hooks/SubRules";
-import { syncSubRules } from "../../libs/subRules";
-import { loadOrFetchSubRules } from "../../libs/subRules";
+import { loadOrFetchSubRules, syncSubRules } from "../../libs/subRules";
 import { useAlert } from "../../hooks/Alert";
 import { syncShareRules } from "../../libs/sync";
 import { debounce } from "../../libs/utils";
@@ -59,7 +61,6 @@ import { useSyncCaches } from "../../hooks/Sync";
 import DownloadButton from "./DownloadButton";
 import UploadButton from "./UploadButton";
 import AddIcon from "@mui/icons-material/Add";
-import EditIcon from "@mui/icons-material/Edit";
 import CancelIcon from "@mui/icons-material/Cancel";
 import SaveIcon from "@mui/icons-material/Save";
 import ValidationInput from "../../hooks/ValidationInput";
@@ -68,6 +69,60 @@ import { useApiList } from "../../hooks/Api";
 import ShowMoreButton from "./ShowMoreButton";
 import { useConfirm } from "../../hooks/Confirm";
 import { useAllTextStyles } from "../../hooks/CustomStyles";
+import {
+  highlightSettingsTarget,
+  useRevealSearchTarget,
+  useSettingsSearchNavigation,
+} from "./SettingsSearchTarget";
+import { RuleDraftProvider, useRuleDraft, useRuleDrafts } from "./RuleDrafts";
+import { isSameStorageValue } from "../../libs/storageEquality";
+
+let disabledSubRuleWriteQueue = Promise.resolve();
+
+function queueDisabledSubRuleTask(task) {
+  const queuedTask = disabledSubRuleWriteQueue
+    .catch(() => undefined)
+    .then(task);
+  disabledSubRuleWriteQueue = queuedTask;
+  return queuedTask;
+}
+
+export function queueDisabledSubRuleUpdate(
+  sourceUrl,
+  pattern,
+  disabled,
+  {
+    readDisabled = getDisabledSubRules,
+    writeDisabled = setDisabledSubRules,
+  } = {}
+) {
+  return queueDisabledSubRuleTask(async () => {
+    const list = await readDisabled(sourceUrl);
+    const patterns = new Set(Array.isArray(list) ? list : []);
+    if (disabled) patterns.add(pattern);
+    else patterns.delete(pattern);
+    const next = [...patterns];
+    await writeDisabled(sourceUrl, next);
+    return next;
+  });
+}
+
+export function queueDisabledSubRuleRead(
+  sourceUrl,
+  readDisabled = getDisabledSubRules
+) {
+  const pendingWrites = disabledSubRuleWriteQueue;
+  return pendingWrites
+    .catch(() => undefined)
+    .then(() => readDisabled(sourceUrl));
+}
+
+export function queueDisabledSubRuleRemoval(
+  sourceUrl,
+  removeDisabled = removeDisabledSubRules
+) {
+  return queueDisabledSubRuleTask(() => removeDisabled(sourceUrl));
+}
 
 // 计算规则的初始表单值
 const calculateInitialValues = (rule) => {
@@ -76,14 +131,51 @@ const calculateInitialValues = (rule) => {
   return { ...base, ...(rule || {}) };
 };
 
+const getComparableFormValues = (values) => {
+  const comparable = { injectCss: "", ...values };
+  // Both an empty delay and "*" inherit the global delay for personal rules.
+  if (
+    comparable.pattern !== GLOBAL_KEY &&
+    comparable.transOnlyRevertDelay === ""
+  ) {
+    comparable.transOnlyRevertDelay = GLOBAL_KEY;
+  }
+  // Number inputs and older saved rules can represent the same value differently.
+  for (const name of ["splitLength", "transOnlyRevertDelay"]) {
+    const value = comparable[name];
+    // Personal numeric zero inherits; a string zero overrides the global value.
+    if (comparable.pattern !== GLOBAL_KEY && value === 0) continue;
+    if (
+      (typeof value === "number" ||
+        (typeof value === "string" && value.trim() !== "")) &&
+      Number.isFinite(Number(value))
+    ) {
+      comparable[name] =
+        comparable.pattern !== GLOBAL_KEY && Number(value) === 0
+          ? "0"
+          : Number(value);
+    }
+  }
+  return comparable;
+};
+
+const isSameFormValue = (first, second) =>
+  isSameStorageValue(
+    getComparableFormValues(first),
+    getComparableFormValues(second)
+  );
+
 // 规则编辑/添加表单字段组件
-function RuleFields({ rule, rules, setShow, setKeyword }) {
+function RuleFields({ rule, rules, setShow, setKeyword, draftId }) {
   // 判断当前是编辑已有规则模式还是添加新规则模式
   const editMode = useMemo(() => !!rule, [rule]);
 
   const i18n = useI18n();
-  // 编辑模式下默认禁用输入框，点击编辑按钮后才允许修改
-  const [disabled, setDisabled] = useState(editMode);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const disabled = !rules || saving;
+  const alert = useAlert();
+  const { confirmDiscard } = useRuleDrafts();
   // 表单错误信息状态
   const [errors, setErrors] = useState({});
   // 记录表单的初始值，以便在取消编辑时恢复
@@ -92,18 +184,68 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
   );
   // 当前表单输入值的状态
   const [formValues, setFormValues] = useState(initialFormValues);
+  const lastSyncedValuesRef = useRef(initialFormValues);
   // 是否展示高级选项（订阅规则查看时不显示 rules，默认展示高级；自定义规则默认折叠高级选项）
   const [showMore, setShowMore] = useState(!rules);
+  useRevealSearchTarget(setShowMore);
   // 获取当前已启用的翻译服务 API 列表
   const { enabledApis } = useApiList();
   // 获取自定义文本样式列表
   const { allTextStyles } = useAllTextStyles();
+  const autoScanRef = useRef(null);
+  const highlightCleanupRef = useRef(null);
+  useEffect(() => () => highlightCleanupRef.current?.(), []);
 
-  // 当传入的 rule 发生改变时（如切换了编辑的规则），同步更新表单的初始值和当前值
-  useEffect(() => {
+  const handleLocateAutoScan = () => {
+    if (!autoScanRef.current || disabled) return;
+    highlightCleanupRef.current?.();
+    const reducedMotion = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
+    const bounds = autoScanRef.current.getBoundingClientRect();
+    const viewport = window.visualViewport;
+    const viewportTop = viewport?.offsetTop ?? 0;
+    const header = document
+      .querySelector(".kt-options-mobile-header")
+      ?.getBoundingClientRect();
+    // The fixed mobile header can cover a target that is inside the viewport.
+    const visible =
+      bounds.height > 0 &&
+      bounds.top >= Math.max(viewportTop, header?.bottom ?? 0) &&
+      bounds.bottom <= viewportTop + (viewport?.height ?? window.innerHeight);
+    const clearHighlight = highlightSettingsTarget(
+      autoScanRef.current,
+      "auto_scan_page",
+      visible ? null : reducedMotion ? "instant" : "smooth"
+    );
+    const timeout = setTimeout(clearHighlight, 6000);
+    highlightCleanupRef.current = () => {
+      clearTimeout(timeout);
+      clearHighlight();
+    };
+  };
+
+  // Preserve drafts when another rule changes or this rule's switch is toggled.
+  useLayoutEffect(() => {
     const newInitialValues = calculateInitialValues(rule);
+    const previous = lastSyncedValuesRef.current;
+    if (savingRef.current || isSameFormValue(previous, newInitialValues))
+      return;
+    lastSyncedValuesRef.current = newInitialValues;
     setInitialFormValues(newInitialValues);
-    setFormValues(newInitialValues);
+    setFormValues((draft) => {
+      const next = { ...newInitialValues };
+      const comparableDraft = getComparableFormValues(draft);
+      const comparablePrevious = getComparableFormValues(previous);
+      for (const name of Object.keys(draft)) {
+        if (
+          !isSameStorageValue(comparableDraft[name], comparablePrevious[name])
+        ) {
+          next[name] = draft[name];
+        }
+      }
+      return next;
+    });
   }, [rule]);
 
   // 从当前表单状态中解构各个字段，提供默认值
@@ -165,8 +307,9 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
 
   // 判断当前表单值是否与初始值不同，决定是否激活“保存”按钮
   const isModified = useMemo(() => {
-    return JSON.stringify(initialFormValues) !== JSON.stringify(formValues);
+    return !isSameFormValue(initialFormValues, formValues);
   }, [initialFormValues, formValues]);
+  useRuleDraft(draftId, !!rules && isModified);
 
   // 校验当前输入的 pattern 是否与已有的其他规则冲突（重复的域名规则）
   const hasSamePattern = (str) => {
@@ -194,22 +337,23 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
     [setKeyword]
   );
 
-  // 通用的表单输入变化处理器
-  const handleChange = (e) => {
-    e.preventDefault();
-    const { name, value } = e.target;
+  const updateFormValue = (name, value) => {
     setFormValues((pre) => ({ ...pre, [name]: value }));
     if (name === "pattern" && !editMode) {
       handlePatternChange(value);
     }
   };
 
-  // 取消按钮处理器：编辑状态下重新禁用表单并回滚修改；新增状态下直接关闭新增面板
+  // Update the draft when a form field changes.
+  const handleChange = (e) => {
+    e.preventDefault();
+    updateFormValue(e.target.name, e.target.value);
+  };
+
+  // Reset existing drafts without leaving the editable state.
   const handleCancel = (e) => {
     e.preventDefault();
-    if (editMode) {
-      setDisabled(true);
-    } else {
+    if (!editMode) {
       setShow(false);
     }
     setErrors({});
@@ -227,8 +371,9 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
   };
 
   // 规则表单保存/新增提交处理器
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (disabled || savingRef.current || (editMode && !isModified)) return;
     const errors = {};
     // 校验 pattern 不能为空
     if (!pattern.trim()) {
@@ -247,15 +392,24 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
       return;
     }
 
-    if (editMode) {
-      // 编辑保存现有规则
-      setDisabled(true);
-      rules.put(rule.pattern, formValues);
-    } else {
-      // 提交添加新规则
-      rules.add(formValues);
-      setShow(false);
-      setFormValues(initialFormValues);
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      if (editMode) {
+        await rules.put(rule.pattern, formValues);
+        lastSyncedValuesRef.current = formValues;
+        setInitialFormValues(formValues);
+      } else {
+        await rules.add(formValues);
+        setShow(false);
+      }
+      setErrors({});
+    } catch (error) {
+      kissLog("save rule", error);
+      alert.error(error?.message || String(error));
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
   };
 
@@ -265,16 +419,33 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
       {GLOBAL_KEY}
     </MenuItem>
   );
-
+  const lockedFieldProps = {
+    className: "kt-rule-field--locked",
+    InputProps: {
+      endAdornment: (
+        <InputAdornment position="end">
+          <LockOutlinedIcon sx={{ fontSize: 17, color: "var(--kt-onv)" }} />
+        </InputAdornment>
+      ),
+    },
+  };
   return (
     <form onSubmit={handleSubmit}>
       <Stack spacing={2}>
         {/* 规则匹配模式输入框（如域名或通配符 '*'） */}
         <CodeField
+          {...(rule?.pattern === "*" ? lockedFieldProps : {})}
           size="small"
           label={i18n("pattern")}
           error={!!errors.pattern}
-          helperText={errors.pattern || i18n("pattern_helper")}
+          helperText={
+            errors.pattern ||
+            i18n(
+              rule?.pattern === "*"
+                ? "global_pattern_fixed_helper"
+                : "pattern_helper"
+            )
+          }
           name="pattern"
           value={pattern}
           disabled={rule?.pattern === "*" || disabled}
@@ -303,10 +474,44 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
         />
         {/* 目标翻译元素选择器配置 */}
         <CodeField
+          {...(autoScan === "true" ? lockedFieldProps : {})}
+          {...(autoScan === "true" && !disabled
+            ? {
+                className: "kt-rule-field--locked kt-rule-field--jump",
+                InputProps: {
+                  onClick: handleLocateAutoScan,
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        size="small"
+                        sx={{ padding: 0 }}
+                        aria-label={i18n("go_to_auto_scan_page")}
+                        title={i18n("go_to_auto_scan_page")}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleLocateAutoScan();
+                        }}
+                      >
+                        <LockOutlinedIcon
+                          sx={{ fontSize: 17, color: "var(--kt-onv)" }}
+                        />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                },
+              }
+            : {})}
           size="small"
           label={i18n("target_selector")}
           error={!!errors.selector}
-          helperText={errors.selector || i18n("selector_helper")}
+          helperText={
+            errors.selector ||
+            i18n(
+              autoScan === "true"
+                ? "selector_auto_scan_helper"
+                : "selector_helper"
+            )
+          }
           name="selector"
           value={selector}
           disabled={autoScan === "true" || disabled}
@@ -337,14 +542,14 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
         <Box>
           <Grid container spacing={2} columns={12}>
             {/* 翻译开关设置 */}
-            <Grid item xs={12} sm={12} md={6} lg={3}>
+            <Grid item xs={12} sm={12} md={6} lg={6}>
               <TextField
                 select
                 size="small"
                 fullWidth
                 name="transOpen"
                 value={transOpen}
-                label={i18n("translate_switch")}
+                label={i18n("translate_alt")}
                 disabled={disabled}
                 onChange={handleChange}
               >
@@ -354,7 +559,7 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
               </TextField>
             </Grid>
             {/* 翻译引擎服务设置 */}
-            <Grid item xs={12} sm={12} md={6} lg={3}>
+            <Grid item xs={12} sm={12} md={6} lg={6}>
               <TextField
                 select
                 size="small"
@@ -374,7 +579,7 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
               </TextField>
             </Grid>
             {/* 源语言设置 */}
-            <Grid item xs={12} sm={12} md={6} lg={3}>
+            <Grid item xs={12} sm={12} md={6} lg={6}>
               <TextField
                 select
                 size="small"
@@ -394,7 +599,7 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
               </TextField>
             </Grid>
             {/* 目标语言设置 */}
-            <Grid item xs={12} sm={12} md={6} lg={3}>
+            <Grid item xs={12} sm={12} md={6} lg={6}>
               <TextField
                 select
                 size="small"
@@ -415,12 +620,13 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
             </Grid>
 
             {/* 自动扫描页面设置 */}
-            <Grid item xs={12} sm={12} md={6} lg={3}>
+            <Grid item xs={12} sm={12} md={6} lg={6}>
               <TextField
                 select
                 size="small"
                 fullWidth
                 name="autoScan"
+                ref={autoScanRef}
                 value={autoScan}
                 label={i18n("auto_scan_page")}
                 disabled={disabled}
@@ -432,7 +638,7 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
               </TextField>
             </Grid>
             {/* 是否翻译富文本设置 */}
-            <Grid item xs={12} sm={12} md={6} lg={3}>
+            <Grid item xs={12} sm={12} md={6} lg={6}>
               <TextField
                 select
                 size="small"
@@ -449,7 +655,7 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
               </TextField>
             </Grid>
             {/* 是否支持 Shadow Root 内部文本翻译设置 */}
-            <Grid item xs={12} sm={12} md={6} lg={3}>
+            <Grid item xs={12} sm={12} md={6} lg={6}>
               <TextField
                 select
                 size="small"
@@ -466,7 +672,7 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
               </TextField>
             </Grid>
             {/* 是否扫描处理页面中所有的节点设置 */}
-            <Grid item xs={12} sm={12} md={6} lg={3}>
+            <Grid item xs={12} sm={12} md={6} lg={6}>
               <TextField
                 select
                 size="small"
@@ -484,7 +690,7 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
             </Grid>
 
             {/* 是否以纯文本模式翻译 <pre> 内容 */}
-            <Grid item xs={12} sm={12} md={6} lg={3}>
+            <Grid item xs={12} sm={12} md={6} lg={6}>
               <TextField
                 select
                 size="small"
@@ -502,7 +708,7 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
             </Grid>
 
             {/* 仅显示译文设置 */}
-            <Grid item xs={12} sm={12} md={6} lg={3}>
+            <Grid item xs={12} sm={12} md={6} lg={6}>
               <TextField
                 select
                 size="small"
@@ -520,7 +726,7 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
             </Grid>
 
             {/* 文本顺序设置 */}
-            <Grid item xs={12} sm={12} md={6} lg={3}>
+            <Grid item xs={12} sm={12} md={6} lg={6}>
               <TextField
                 select
                 size="small"
@@ -541,48 +747,8 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
               </TextField>
             </Grid>
 
-            {/* 原文包裹设置 */}
-            <Grid item xs={12} sm={12} md={6} lg={3}>
-              <TextField
-                select
-                size="small"
-                fullWidth
-                name="wrapOriginal"
-                value={wrapOriginal}
-                label={i18n("wrap_original")}
-                disabled={disabled}
-                onChange={handleChange}
-              >
-                {GlobalItem}
-                <MenuItem value={"false"}>{i18n("disable")}</MenuItem>
-                <MenuItem value={"true"}>{i18n("enable")}</MenuItem>
-              </TextField>
-            </Grid>
-
-            {effectiveWrapOriginal && (
-              <Grid item xs={12} sm={12} md={6} lg={3}>
-                <TextField
-                  select
-                  size="small"
-                  fullWidth
-                  name="originalTextStyle"
-                  value={originalTextStyle}
-                  label={i18n("original_text_style")}
-                  disabled={disabled}
-                  onChange={handleChange}
-                >
-                  {GlobalItem}
-                  {allTextStyles.map((item) => (
-                    <MenuItem key={item.styleSlug} value={item.styleSlug}>
-                      {item.styleName}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </Grid>
-            )}
-
             {/* 悬停恢复原文设置 */}
-            <Grid item xs={12} sm={12} md={6} lg={3}>
+            <Grid item xs={12} sm={12} md={6} lg={6}>
               <TextField
                 select
                 size="small"
@@ -600,7 +766,7 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
             </Grid>
 
             {/* 悬停恢复原文延迟时长配置 */}
-            <Grid item xs={12} sm={12} md={6} lg={3}>
+            <Grid item xs={12} sm={12} md={6} lg={6}>
               <TextField
                 size="small"
                 fullWidth
@@ -615,7 +781,7 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
             </Grid>
 
             {/* 长段落切分翻译配置 */}
-            <Grid item xs={12} sm={12} md={6} lg={3}>
+            <Grid item xs={12} sm={12} md={6} lg={6}>
               <TextField
                 select
                 size="small"
@@ -635,7 +801,7 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
               </TextField>
             </Grid>
             {/* 长段落切分翻译的触发长度阈值 */}
-            <Grid item xs={12} sm={12} md={6} lg={3}>
+            <Grid item xs={12} sm={12} md={6} lg={6}>
               <ValidationInput
                 fullWidth
                 size="small"
@@ -650,7 +816,7 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
               />
             </Grid>
             {/* 单词高亮标记设置 */}
-            <Grid item xs={12} sm={12} md={6} lg={3}>
+            <Grid item xs={12} sm={12} md={6} lg={6}>
               <TextField
                 select
                 size="small"
@@ -671,7 +837,7 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
             </Grid>
 
             {/* 是否翻译网页 title 标签配置 */}
-            <Grid item xs={12} sm={12} md={6} lg={3}>
+            <Grid item xs={12} sm={12} md={6} lg={6}>
               <TextField
                 select
                 size="small"
@@ -688,7 +854,7 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
               </TextField>
             </Grid>
             {/* 插入译文所用的 HTML 标签设置 */}
-            <Grid item xs={12} sm={12} md={6} lg={3}>
+            <Grid item xs={12} sm={12} md={6} lg={6}>
               <TextField
                 select
                 size="small"
@@ -706,7 +872,7 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
             </Grid>
 
             {/* 自定义译文样式模板设置 */}
-            <Grid item xs={12} sm={12} md={6} lg={3}>
+            <Grid item xs={12} sm={12} md={6} lg={6}>
               <TextField
                 select
                 size="small"
@@ -725,6 +891,45 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
                 ))}
               </TextField>
             </Grid>
+
+            <Grid item xs={12} sm={12} md={6} lg={6}>
+              <TextField
+                select
+                size="small"
+                fullWidth
+                name="wrapOriginal"
+                value={wrapOriginal}
+                label={i18n("wrap_original")}
+                disabled={disabled}
+                onChange={handleChange}
+              >
+                {GlobalItem}
+                <MenuItem value="false">{i18n("disable")}</MenuItem>
+                <MenuItem value="true">{i18n("enable")}</MenuItem>
+              </TextField>
+            </Grid>
+
+            {effectiveWrapOriginal && (
+              <Grid item xs={12} sm={12} md={6} lg={6}>
+                <TextField
+                  select
+                  size="small"
+                  fullWidth
+                  name="originalTextStyle"
+                  value={originalTextStyle}
+                  label={i18n("original_text_style")}
+                  disabled={disabled}
+                  onChange={handleChange}
+                >
+                  {GlobalItem}
+                  {allTextStyles.map((item) => (
+                    <MenuItem key={item.styleSlug} value={item.styleSlug}>
+                      {item.styleName}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+            )}
           </Grid>
         </Box>
 
@@ -865,92 +1070,78 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
           </>
         )}
 
-        {/* 规则保存/编辑/删除控制按钮区域 */}
+        {/* Rule actions */}
         {rules &&
           (editMode ? (
             // 编辑已有规则模式
-            <Stack direction="row" spacing={2}>
-              {disabled ? (
-                <>
-                  {/* 点击开启表单编辑 */}
-                  <Button
-                    size="small"
-                    variant="contained"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setDisabled(false);
-                    }}
-                    startIcon={<EditIcon />}
-                  >
-                    {i18n("edit")}
-                  </Button>
-                  {/* 全局默认规则（'*'）不允许删除 */}
-                  {rule?.pattern !== "*" && (
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        rules.del(rule.pattern);
-                      }}
-                      startIcon={<DeleteIcon />}
-                    >
-                      {i18n("delete")}
-                    </Button>
-                  )}
-                </>
-              ) : (
-                <>
-                  {/* 保存编辑修改 */}
-                  <Button
-                    size="small"
-                    variant="contained"
-                    type="submit"
-                    startIcon={<SaveIcon />}
-                    disabled={!isModified}
-                  >
-                    {i18n("save")}
-                  </Button>
-                  {/* 取消并撤销更改 */}
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={handleCancel}
-                    startIcon={<CancelIcon />}
-                  >
-                    {i18n("cancel")}
-                  </Button>
-                  {/* 恢复至系统预置规则配置 */}
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={handleRestore}
-                  >
-                    {i18n("restore_default")}
-                  </Button>
-                </>
+            <Stack direction="row" spacing={2} useFlexGap flexWrap="wrap">
+              <LoadingButton
+                size="small"
+                variant="contained"
+                type="submit"
+                startIcon={<SaveIcon />}
+                loading={saving}
+                disabled={!isModified || saving}
+              >
+                {i18n("save")}
+              </LoadingButton>
+              {isModified && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={handleCancel}
+                  startIcon={<CancelIcon />}
+                  disabled={saving}
+                >
+                  {i18n("cancel")}
+                </Button>
+              )}
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={handleRestore}
+                disabled={saving}
+              >
+                {i18n("restore_default")}
+              </Button>
+              {rule?.pattern !== "*" && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  disabled={saving}
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    if (await confirmDiscard(draftId)) rules.del(rule.pattern);
+                  }}
+                  startIcon={<DeleteIcon />}
+                >
+                  {i18n("delete")}
+                </Button>
               )}
               {/* 高级选项折叠展示开关 */}
               <ShowMoreButton showMore={showMore} onChange={setShowMore} />
             </Stack>
           ) : (
             // 新建添加规则模式
-            <Stack direction="row" spacing={2}>
+            <Stack direction="row" spacing={2} useFlexGap flexWrap="wrap">
               {/* 新增规则保存 */}
-              <Button
+              <LoadingButton
                 size="small"
                 variant="contained"
                 type="submit"
                 startIcon={<SaveIcon />}
+                loading={saving}
+                disabled={saving}
               >
                 {i18n("save")}
-              </Button>
+              </LoadingButton>
               {/* 新增规则取消 */}
               <Button
                 size="small"
                 variant="outlined"
                 onClick={handleCancel}
                 startIcon={<CancelIcon />}
+                disabled={saving}
               >
                 {i18n("cancel")}
               </Button>
@@ -964,8 +1155,20 @@ function RuleFields({ rule, rules, setShow, setKeyword }) {
 }
 
 // 规则折叠面板组件，用于展示和启用/禁用单个规则
-function RuleAccordion({ rule, rules, sourceUrl, isExpanded = false }) {
+function RuleAccordion({
+  rule,
+  rules,
+  sourceUrl,
+  isExpanded = false,
+  draftId: suppliedDraftId,
+}) {
   const i18n = useI18n();
+  const { confirmDiscard } = useRuleDrafts();
+  const draftId =
+    suppliedDraftId ??
+    (rules
+      ? `rule:${rule.pattern}`
+      : `subscription:${sourceUrl}:${rule.pattern}`);
   // 面板展开状态
   const [expanded, setExpanded] = useState(isExpanded);
   const isPersonalRule = !!rules && rule.pattern !== GLOBAL_KEY;
@@ -973,32 +1176,52 @@ function RuleAccordion({ rule, rules, sourceUrl, isExpanded = false }) {
   const isRuleEnabled = isPersonalRule ? rule.enabled !== false : true;
 
   // 用户是否手动禁用了该订阅规则
-  const [disabledByUser, setDisabledByUser] = useState(false);
+  const [disabledByUser, setDisabledByUser] = useState(
+    isSubRule ? null : false
+  );
+  const [subRulePending, setSubRulePending] = useState(isSubRule);
+  const subRuleRequestRef = useRef(0);
   const alert = useAlert();
 
   // 若为订阅规则（rules 不存在且 sourceUrl 存在），则在初始化时从存储中读取该 pattern 的启用/禁用状态
   useEffect(() => {
-    if (!rules) {
-      if (!sourceUrl) return;
-      (async () => {
-        try {
-          const list = await getDisabledSubRules(sourceUrl);
-          // REVIEW: 此异步回调在组件卸载时若被执行可能会造成未挂载组件状态更新的报错，虽然在多标签切换等低频场景下影响较小
-          setDisabledByUser(Array.isArray(list) && list.includes(rule.pattern));
-        } catch (err) {
+    if (!isSubRule || !sourceUrl) {
+      setDisabledByUser(false);
+      setSubRulePending(false);
+      return undefined;
+    }
+
+    const requestId = ++subRuleRequestRef.current;
+    let active = true;
+    setDisabledByUser(null);
+    setSubRulePending(true);
+
+    void queueDisabledSubRuleRead(sourceUrl)
+      .then((list) => {
+        if (!active || requestId !== subRuleRequestRef.current) return;
+        setDisabledByUser(Array.isArray(list) && list.includes(rule.pattern));
+      })
+      .catch((err) => {
+        if (active && requestId === subRuleRequestRef.current) {
+          setDisabledByUser(false);
           kissLog("getDisabledSubRules", err);
         }
-      })();
-    }
-  }, [rule, rules, sourceUrl]);
+      })
+      .finally(() => {
+        if (active && requestId === subRuleRequestRef.current) {
+          setSubRulePending(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isSubRule, rule.pattern, sourceUrl]);
 
   // 面板展开/折叠切换
-  const handleChange = (e) => {
-    setExpanded((pre) => !pre);
-  };
-
-  const stopSummaryToggle = (e) => {
-    e.stopPropagation();
+  const handleChange = async (e, nextExpanded) => {
+    if (!nextExpanded && !(await confirmDiscard(draftId))) return;
+    setExpanded(nextExpanded);
   };
 
   const titleOpacity = isPersonalRule
@@ -1009,61 +1232,77 @@ function RuleAccordion({ rule, rules, sourceUrl, isExpanded = false }) {
       ? 1
       : 0.5;
 
+  const handleSubRuleToggle = async (event) => {
+    if (subRulePending) return;
+    const enabled = event.target.checked;
+    const toDisable = !enabled;
+    const previousDisabled = disabledByUser;
+    const requestId = ++subRuleRequestRef.current;
+    setDisabledByUser(toDisable);
+    setSubRulePending(true);
+    try {
+      await queueDisabledSubRuleUpdate(sourceUrl, rule.pattern, toDisable);
+      if (requestId !== subRuleRequestRef.current) return;
+      setDisabledByUser(toDisable);
+      alert.success(i18n(toDisable ? "rule_disabled" : "rule_enabled"));
+    } catch (err) {
+      if (requestId !== subRuleRequestRef.current) return;
+      setDisabledByUser(previousDisabled);
+      kissLog("toggle disabled sub rule", err);
+      alert.error(i18n("rule_toggle_failed"));
+    } finally {
+      if (requestId === subRuleRequestRef.current) {
+        setSubRulePending(false);
+      }
+    }
+  };
+
+  const ruleSwitch = isPersonalRule ? (
+    <Switch
+      size="small"
+      checked={isRuleEnabled}
+      inputProps={{
+        "aria-label": `Toggle personal rule ${rule.pattern}`,
+      }}
+      onChange={(event) => {
+        const enabled = event.target.checked;
+        rules.put(rule.pattern, { enabled });
+        alert.success(i18n(enabled ? "rule_enabled" : "rule_disabled"));
+      }}
+    />
+  ) : isSubRule ? (
+    <Switch
+      size="small"
+      checked={disabledByUser === false}
+      disabled={subRulePending}
+      inputProps={{
+        "aria-label": `Toggle subscription rule ${rule.pattern}`,
+        "aria-busy": subRulePending,
+      }}
+      onChange={handleSubRuleToggle}
+    />
+  ) : null;
+
   return (
-    <Accordion expanded={expanded} onChange={handleChange}>
-      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-        <Stack
-          direction="row"
-          alignItems="center"
-          spacing={1}
-          sx={{ width: "100%" }}
+    <Box className="kt-rule-accordion" sx={{ position: "relative" }}>
+      {ruleSwitch && (
+        <Box
+          className="kt-rule-enable-control"
+          sx={{
+            position: "absolute",
+            top: 13,
+            insetInlineStart: 14,
+            zIndex: 2,
+          }}
         >
-          {/* 对于个人规则，提供一个 Switch 按钮，控制该条规则在匹配时的生效状态 */}
-          {isPersonalRule && (
-            <Switch
-              size="small"
-              checked={isRuleEnabled}
-              inputProps={{
-                "aria-label": `Toggle personal rule ${rule.pattern}`,
-              }}
-              onPointerDown={stopSummaryToggle}
-              onClick={stopSummaryToggle}
-              onChange={(e) => {
-                const enabled = e.target.checked;
-                rules.put(rule.pattern, { enabled });
-                alert.success(i18n(enabled ? "rule_enabled" : "rule_disabled"));
-              }}
-            />
-          )}
-
-          {/* 对于订阅规则，额外提供一个 Switch 按钮，控制该条规则在匹配时的生效状态 */}
-          {isSubRule && (
-            <Switch
-              size="small"
-              checked={!disabledByUser}
-              onPointerDown={stopSummaryToggle} // 阻止事件传播，避免点击 Switch 触发折叠面板展开/收起
-              onClick={stopSummaryToggle}
-              onChange={async (e) => {
-                const enabled = e.target.checked;
-                const toDisable = !enabled;
-                try {
-                  const list = await getDisabledSubRules(sourceUrl);
-                  const set = new Set(Array.isArray(list) ? list : []);
-                  if (toDisable) set.add(rule.pattern);
-                  else set.delete(rule.pattern);
-                  await setDisabledSubRules(sourceUrl, [...set]);
-                  setDisabledByUser(toDisable);
-                  alert.success(
-                    i18n(toDisable ? "rule_disabled" : "rule_enabled")
-                  );
-                } catch (err) {
-                  kissLog("toggle disabled sub rule", err);
-                  alert.error(i18n("rule_toggle_failed"));
-                }
-              }}
-            />
-          )}
-
+          {ruleSwitch}
+        </Box>
+      )}
+      <Accordion expanded={expanded} onChange={handleChange}>
+        <AccordionSummary
+          expandIcon={<ExpandMoreIcon />}
+          className={ruleSwitch ? "kt-rule-summary--with-switch" : undefined}
+        >
           <Typography
             sx={{
               opacity: titleOpacity,
@@ -1075,12 +1314,14 @@ function RuleAccordion({ rule, rules, sourceUrl, isExpanded = false }) {
               ? `[${i18n("global_rule")}] ${rule.pattern}`
               : rule.pattern}
           </Typography>
-        </Stack>
-      </AccordionSummary>
-      <AccordionDetails>
-        {expanded && <RuleFields rule={rule} rules={rules} />}
-      </AccordionDetails>
-    </Accordion>
+        </AccordionSummary>
+        <AccordionDetails>
+          {expanded && (
+            <RuleFields rule={rule} rules={rules} draftId={draftId} />
+          )}
+        </AccordionDetails>
+      </Accordion>
+    </Box>
   );
 }
 
@@ -1088,9 +1329,14 @@ function RuleAccordion({ rule, rules, sourceUrl, isExpanded = false }) {
 function ShareButton({ rules, injectRules, selectedUrl }) {
   const alert = useAlert();
   const i18n = useI18n();
+  const [sharing, setSharing] = useState(false);
+  const sharingRef = useRef(false);
 
   // 处理分享点击逻辑
   const handleClick = async () => {
+    if (sharingRef.current) return;
+    sharingRef.current = true;
+    setSharing(true);
     try {
       // 获取同步配置
       const { syncType, syncUrl, syncKey } = await getSyncWithDefault();
@@ -1119,24 +1365,56 @@ function ShareButton({ rules, injectRules, selectedUrl }) {
     } catch (err) {
       alert.warning(i18n("error_got_some_wrong"));
       kissLog("share rules", err);
+    } finally {
+      sharingRef.current = false;
+      setSharing(false);
     }
   };
 
   return (
-    <Button
+    <LoadingButton
       size="small"
       variant="outlined"
       onClick={handleClick}
+      loading={sharing}
+      aria-busy={sharing}
       startIcon={<ShareIcon />}
     >
       {i18n("share")}
-    </Button>
+    </LoadingButton>
   );
 }
 
 // 个人自定义规则面板组件
 function UserRules({ subRules, rules }) {
   const i18n = useI18n();
+  const { drafts } = useRuleDrafts();
+  const ruleKeysRef = useRef({ keys: new Map(), nextKey: 0 });
+  const getRuleKey = (pattern) => {
+    const state = ruleKeysRef.current;
+    if (!state.keys.has(pattern)) state.keys.set(pattern, ++state.nextKey);
+    return state.keys.get(pattern);
+  };
+  const editableRules = {
+    ...rules,
+    put: async (pattern, values) => {
+      const nextPattern = values.pattern;
+      if (!nextPattern || nextPattern === pattern)
+        return rules.put(pattern, values);
+
+      // The optimistic rename and any rollback must keep the draft mounted.
+      const keys = ruleKeysRef.current.keys;
+      keys.set(nextPattern, getRuleKey(pattern));
+      try {
+        const result = await rules.put(pattern, values);
+        keys.delete(pattern);
+        return result;
+      } catch (error) {
+        keys.delete(nextPattern);
+        throw error;
+      }
+    },
+  };
   // 控制是否显示“添加新规则”的表单面板
   const [showAdd, setShowAdd] = useState(false);
   // 获取当前偏好设置并更新设置方法
@@ -1257,6 +1535,7 @@ function UserRules({ subRules, rules }) {
           rules={rules}
           setShow={setShowAdd}
           setKeyword={setKeyword}
+          draftId="new-rule"
         />
       )}
 
@@ -1266,10 +1545,17 @@ function UserRules({ subRules, rules }) {
           .filter(
             (rule) =>
               rule.pattern !== "*" &&
-              (rule.pattern.includes(keyword) || keyword.includes(rule.pattern))
+              (drafts.has(`rule:${getRuleKey(rule.pattern)}`) ||
+                rule.pattern.includes(keyword) ||
+                keyword.includes(rule.pattern))
           )
           .map((rule) => (
-            <RuleAccordion key={rule.pattern} rule={rule} rules={rules} />
+            <RuleAccordion
+              key={getRuleKey(rule.pattern)}
+              rule={rule}
+              rules={editableRules}
+              draftId={`rule:${getRuleKey(rule.pattern)}`}
+            />
           ))}
       </Box>
 
@@ -1301,7 +1587,7 @@ function SubRulesItem({
   syncAt,
   selectedUrl,
   delSub,
-  setSelectedRules,
+  setSelectedRulesForUrl,
   updateDataCache,
   deleteDataCache,
 }) {
@@ -1316,7 +1602,7 @@ function SubRulesItem({
       await deleteDataCache(url); // 删除本地同步的时间戳缓存
       // 移除针对该订阅源下单独定制的规则禁用状态
       try {
-        await removeDisabledSubRules(url);
+        await queueDisabledSubRuleRemoval(url);
       } catch (err) {
         kissLog("removeDisabledSubRules", err);
       }
@@ -1331,8 +1617,8 @@ function SubRulesItem({
       setLoading(true);
       const rules = await syncSubRules(url); // 发起网络请求获取最新的订阅规则
       // 如果当前正处于选中查看状态，则立刻更新 UI 中正在展示的规则列表
-      if (rules.length > 0 && url === selectedUrl) {
-        setSelectedRules(rules);
+      if (rules.length > 0) {
+        setSelectedRulesForUrl(url, rules);
       }
       await updateDataCache(url); // 更新最近同步时间戳
     } catch (err) {
@@ -1349,7 +1635,13 @@ function SubRulesItem({
   };
 
   return (
-    <Stack direction="row" alignItems="center" spacing={2}>
+    <Stack
+      direction="row"
+      alignItems="center"
+      spacing={2}
+      useFlexGap
+      flexWrap="wrap"
+    >
       {/* 规则源单选框 */}
       <FormControlLabel
         value={url}
@@ -1367,18 +1659,20 @@ function SubRulesItem({
         </span>
       )}
 
-      {/* 同步中展示菊花图，否则展示同步按钮 */}
-      {loading ? (
-        <CircularProgress size={16} />
-      ) : (
-        <IconButton
-          size="small"
-          onClick={handleSync}
-          aria-label={`Sync subscription ${url}`}
-        >
+      <IconButton
+        size="small"
+        onClick={handleSync}
+        disabled={loading}
+        aria-label={`Sync subscription ${url}`}
+        aria-disabled={loading}
+        aria-busy={loading}
+      >
+        {loading ? (
+          <CircularProgress size={20} />
+        ) : (
           <SyncIcon fontSize="small" />
-        </IconButton>
-      )}
+        )}
+      </IconButton>
 
       {/* 首个默认订阅源，以及当前正在选中的订阅源不允许删除 */}
       {index !== 0 && selectedUrl !== url && (
@@ -1395,7 +1689,7 @@ function SubRulesItem({
 }
 
 // 订阅规则源新增组件
-function SubRulesEdit({ subList, addSub, updateDataCache }) {
+function SubRulesEdit({ subList, beginSubAdd, addSub, updateDataCache }) {
   const i18n = useI18n();
   // 输入的订阅 URL
   const [inputText, setInputText] = useState("");
@@ -1403,11 +1697,23 @@ function SubRulesEdit({ subList, addSub, updateDataCache }) {
   const [inputError, setInputError] = useState("");
   // 控制是否展示 URL 输入栏
   const [showInput, setShowInput] = useState(false);
+  useRevealSearchTarget(setShowInput, ["subscribe_url"]);
   const [loading, setLoading] = useState(false);
+  const requestIdRef = useRef(0);
+  const mountedRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // 取消并隐藏输入栏
   const handleCancel = (e) => {
     e.preventDefault();
+    requestIdRef.current += 1;
+    setLoading(false);
     setShowInput(false);
     setInputText("");
     setInputError("");
@@ -1429,22 +1735,33 @@ function SubRulesEdit({ subList, addSub, updateDataCache }) {
       return;
     }
 
+    const requestId = ++requestIdRef.current;
+    const operation = beginSubAdd(url);
+    const isCurrent = () =>
+      requestId === requestIdRef.current && operation.isCurrent();
     try {
       setLoading(true);
-      const rules = await syncSubRules(url);
+      const rules = await syncSubRules(url, { shouldCommit: isCurrent });
+      if (!isCurrent()) return;
       // REVIEW: 若获取成功但返回的规则数刚好为 0（如合法的空订阅源），直接抛错并提示“获取 URL 失败 (error_fetch_url)”不够精确
       if (rules.length === 0) {
         throw new Error("empty rules");
       }
       await addSub(url); // 将新订阅源添加到列表
+      if (!isCurrent()) return;
       await updateDataCache(url); // 记录首次同步的时间戳
+      if (!mountedRef.current || !isCurrent()) return;
       setShowInput(false);
       setInputText("");
     } catch (err) {
+      if (!isCurrent()) return;
       kissLog("fetch rules", err);
-      setInputError(i18n("error_fetch_url")); // 网络请求或同步解析失败提示
+      if (mountedRef.current) setInputError(i18n("error_fetch_url"));
     } finally {
-      setLoading(false);
+      operation.finish();
+      if (mountedRef.current && requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -1460,7 +1777,13 @@ function SubRulesEdit({ subList, addSub, updateDataCache }) {
 
   return (
     <>
-      <Stack direction="row" alignItems="center" spacing={2}>
+      <Stack
+        direction="row"
+        alignItems="center"
+        spacing={2}
+        useFlexGap
+        flexWrap="wrap"
+      >
         {/* 点击展开新增订阅 URL 输入框 */}
         <Button
           size="small"
@@ -1489,7 +1812,13 @@ function SubRulesEdit({ subList, addSub, updateDataCache }) {
             label={i18n("subscribe_url")}
           />
 
-          <Stack direction="row" alignItems="center" spacing={2}>
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={2}
+            useFlexGap
+            flexWrap="wrap"
+          >
             <Button
               size="small"
               variant="contained"
@@ -1515,20 +1844,49 @@ function SubRulesEdit({ subList, addSub, updateDataCache }) {
 }
 
 // 订阅规则配置主面板组件
-function SubRules({ subRules }) {
+function SubRules({ subRules, syncCaches }) {
+  const i18n = useI18n();
+  const rulesListRef = useRef(null);
+  const [rulesListHeight, setRulesListHeight] = useState(0);
   const {
     subList, // 订阅源列表
     selectSub, // 选择订阅源方法
+    beginSubAdd,
     addSub, // 添加订阅源方法
     delSub, // 删除订阅源方法
     selectedUrl, // 当前选中的订阅 URL
     selectedRules, // 当前选中订阅源下的规则集列表
-    setSelectedRules, // 更新当前选中订阅源规则集列表的方法
+    setSelectedRulesForUrl, // Update the rules for the currently selected subscription.
     loading, // 是否正在同步/加载
   } = subRules;
 
-  // 引入同步缓存 Hook，用于管理 WebDAV 或本地订阅源的最后同步时间戳
-  const { dataCaches, updateDataCache, deleteDataCache } = useSyncCaches();
+  const { dataCaches, updateDataCache, deleteDataCache, reloadSync } =
+    syncCaches;
+
+  useEffect(() => {
+    if (loading) return;
+    // Automatic downloads write timestamps outside this view's cache state.
+    // Refresh when opening the tab or finishing a subscription load.
+    reloadSync().catch((error) => kissLog("load sync caches", error));
+  }, [loading, selectedUrl, reloadSync]);
+
+  useLayoutEffect(() => {
+    const listElement = rulesListRef.current;
+    if (loading || !listElement) return undefined;
+
+    const measure = () => {
+      const nextHeight = Math.ceil(listElement.getBoundingClientRect().height);
+      setRulesListHeight((current) =>
+        current === nextHeight ? current : nextHeight
+      );
+    };
+    measure();
+
+    if (typeof ResizeObserver !== "function") return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(listElement);
+    return () => observer.disconnect();
+  }, [loading, selectedRules.length]);
 
   // 切换选中的订阅规则源
   const handleSelect = (e) => {
@@ -1541,12 +1899,17 @@ function SubRules({ subRules }) {
       {/* 新增订阅源按钮及输入框 */}
       <SubRulesEdit
         subList={subList}
+        beginSubAdd={beginSubAdd}
         addSub={addSub}
         updateDataCache={updateDataCache}
       />
 
       {/* 订阅源单选列表 */}
-      <RadioGroup value={selectedUrl} onChange={handleSelect}>
+      <RadioGroup
+        value={selectedUrl}
+        onChange={handleSelect}
+        aria-label={i18n("subscribe_rules")}
+      >
         {subList.map((item, index) => (
           <SubRulesItem
             key={item.url}
@@ -1555,7 +1918,7 @@ function SubRules({ subRules }) {
             index={index}
             selectedUrl={selectedUrl}
             delSub={delSub}
-            setSelectedRules={setSelectedRules}
+            setSelectedRulesForUrl={setSelectedRulesForUrl}
             updateDataCache={updateDataCache}
             deleteDataCache={deleteDataCache}
           />
@@ -1563,11 +1926,23 @@ function SubRules({ subRules }) {
       </RadioGroup>
 
       {/* 显示当前选中订阅源下的具体规则集折叠面板 */}
-      <Box>
+      <Box
+        ref={rulesListRef}
+        aria-busy={loading}
+        sx={{
+          minHeight: loading ? Math.max(80, rulesListHeight) : undefined,
+        }}
+      >
         {loading ? (
-          <center>
+          <Box
+            sx={{
+              display: "grid",
+              minHeight: 80,
+              placeItems: "center",
+            }}
+          >
             <CircularProgress />
-          </center>
+          </Box>
         ) : (
           selectedRules.map((rule) => (
             <RuleAccordion
@@ -1608,16 +1983,46 @@ function GlobalRule({ rules }) {
 }
 
 // 规则设置中心主入口组件，负责全局规则、自定义规则、订阅规则的三栏式标签切换展示
-export default function Rules() {
+function RulesContent() {
   const i18n = useI18n();
   // 当前处于激活状态的标签页索引 (0: 全局规则, 1: 自定义规则, 2: 订阅规则)
   const [activeTab, setActiveTab] = useState(0);
+  const { hasDrafts, confirmDiscard } = useRuleDrafts();
+  const { target: searchTarget, navigationKey } = useSettingsSearchNavigation();
+  useEffect(() => {
+    if (searchTarget) {
+      const nextTab = ["subscribe_rules", "subscribe_url"].includes(
+        searchTarget
+      )
+        ? 2
+        : searchTarget === "inject_rules"
+          ? 1
+          : 0;
+      if (nextTab === activeTab) return undefined;
+      if (!hasDrafts) {
+        setActiveTab(nextTab);
+        return undefined;
+      }
+      let active = true;
+      confirmDiscard().then((discard) => {
+        if (active && discard) setActiveTab(nextTab);
+      });
+      return () => {
+        active = false;
+      };
+    }
+    // Only explicit search navigation should switch tabs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTarget, navigationKey]);
   const subRules = useSubRules();
   const rules = useRules();
+  // Keep cache writes alive when a subscription action outlasts its tab.
+  const syncCaches = useSyncCaches();
 
   // 标签页切换处理器
-  const handleTabChange = (e, newValue) => {
-    setActiveTab(newValue);
+  const handleTabChange = async (e, newValue) => {
+    if (newValue !== activeTab && (await confirmDiscard()))
+      setActiveTab(newValue);
   };
 
   return (
@@ -1633,28 +2038,67 @@ export default function Rules() {
         </Alert>
 
         {/* 规则分类选项卡导航 */}
-        <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
-          <Tabs value={activeTab} onChange={handleTabChange}>
-            <Tab label={i18n("global_rule")} />
-            <Tab label={i18n("personal_rules")} />
-            <Tab label={i18n("subscribe_rules")} />
-            {/* <Tab label={i18n("overwrite_subscribe_rules")} /> */}
-          </Tabs>
-        </Box>
+        <Tabs
+          value={activeTab}
+          onChange={handleTabChange}
+          aria-label={i18n("rules_setting")}
+        >
+          <Tab
+            id="kt-rules-global-tab"
+            aria-controls="kt-rules-global-panel"
+            label={i18n("global_rule")}
+          />
+          <Tab
+            id="kt-rules-personal-tab"
+            aria-controls="kt-rules-personal-panel"
+            label={i18n("personal_rules")}
+          />
+          <Tab
+            id="kt-rules-subscribe-tab"
+            aria-controls="kt-rules-subscribe-panel"
+            label={i18n("subscribe_rules")}
+          />
+          {/* <Tab label={i18n("overwrite_subscribe_rules")} /> */}
+        </Tabs>
         {/* 全局默认规则视图 (Tab 0) */}
-        <div hidden={activeTab !== 0}>
+        <div
+          id="kt-rules-global-panel"
+          role="tabpanel"
+          aria-labelledby="kt-rules-global-tab"
+          hidden={activeTab !== 0}
+        >
           {activeTab === 0 && <GlobalRule rules={rules} />}
         </div>
         {/* 个人自定义规则视图 (Tab 1) */}
-        <div hidden={activeTab !== 1}>
+        <div
+          id="kt-rules-personal-panel"
+          role="tabpanel"
+          aria-labelledby="kt-rules-personal-tab"
+          hidden={activeTab !== 1}
+        >
           {activeTab === 1 && <UserRules subRules={subRules} rules={rules} />}
         </div>
         {/* 外部规则订阅视图 (Tab 2) */}
-        <div hidden={activeTab !== 2}>
-          {activeTab === 2 && <SubRules subRules={subRules} />}
+        <div
+          id="kt-rules-subscribe-panel"
+          role="tabpanel"
+          aria-labelledby="kt-rules-subscribe-tab"
+          hidden={activeTab !== 2}
+        >
+          {activeTab === 2 && (
+            <SubRules subRules={subRules} syncCaches={syncCaches} />
+          )}
         </div>
         {/* <div hidden={activeTab !== 3}>{activeTab === 3 && <OwSubRule />}</div> */}
       </Stack>
     </Box>
+  );
+}
+
+export default function Rules({ guardNavigation = false }) {
+  return (
+    <RuleDraftProvider guardNavigation={guardNavigation}>
+      <RulesContent />
+    </RuleDraftProvider>
   );
 }

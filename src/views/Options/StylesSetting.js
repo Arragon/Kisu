@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRevealSearchTarget } from "./SettingsSearchTarget";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import CodeField from "./CodeField";
@@ -12,10 +13,25 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import AddIcon from "@mui/icons-material/Add";
 import { useConfirm } from "../../hooks/Confirm";
 import Box from "@mui/material/Box";
-import { useAllTextStyles, useStyleList } from "../../hooks/CustomStyles";
+import {
+  getCompactStylePreviewCode,
+  toPersistedCustomStyle,
+  useAllTextStyles,
+  useStyleList,
+} from "../../hooks/CustomStyles";
 import { css } from "@emotion/css";
 import { getRandomQuote } from "../../config/quotes";
 import { useSetting } from "../../hooks/Setting";
+import { GripGlyph } from "../../components/TextareaResizeGrip";
+import { TEXTAREA_GRIP_STYLE_KEYS } from "../../config/textareaGripStyles";
+import { useTextareaGripStyle } from "../../hooks/useTextareaHeightLock";
+import {
+  SettingsCard,
+  SettingsRow,
+  SettingsSection,
+  SettingsSegmented,
+  SettingsSelect,
+} from "./SettingsCard";
 
 /**
  * 单个自定义 CSS 样式编辑表单区域
@@ -31,25 +47,27 @@ function StyleFields({ customStyle, deleteStyle, updateStyle, isBuiltin }) {
   const {
     setting: { uiLang },
   } = useSetting();
-  // 暂存表单输入值的状态
-  const [formData, setFormData] = useState({});
-  // 用于判定当前输入是否发生改变以控制保存按钮
-  const [isModified, setIsModified] = useState(false);
+  const [formData, setFormData] = useState(() => customStyle || {});
+  const lastSyncedStyleRef = useRef(JSON.stringify(customStyle || {}));
   const confirm = useConfirm();
 
-  // 监听外部样式更新，重置表单
+  // useAllTextStyles rebuilds style objects whenever customStyles changes.
+  // Equivalent objects must not reset the active form.
+  // Preserve unsaved edits when another style is added or changed.
+  // Reset the draft only when the persisted style content changes.
   useEffect(() => {
-    if (customStyle) {
-      setFormData(customStyle);
+    const nextSnapshot = JSON.stringify(customStyle || {});
+    if (lastSyncedStyleRef.current === nextSnapshot) {
+      return;
     }
+    lastSyncedStyleRef.current = nextSnapshot;
+    setFormData(customStyle || {});
   }, [customStyle]);
 
-  // 比对是否发生过修改以激活保存按钮
-  useEffect(() => {
-    if (!customStyle) return;
-    const hasChanged = JSON.stringify(customStyle) !== JSON.stringify(formData);
-    setIsModified(hasChanged);
-  }, [customStyle, formData]);
+  const isModified = useMemo(
+    () => JSON.stringify(customStyle || {}) !== JSON.stringify(formData),
+    [customStyle, formData]
+  );
 
   // 表单字段输入改变处理
   const handleChange = (e) => {
@@ -64,7 +82,7 @@ function StyleFields({ customStyle, deleteStyle, updateStyle, isBuiltin }) {
 
   // 触发样式规则更新
   const handleSave = () => {
-    updateStyle(customStyle.styleSlug, formData);
+    updateStyle(customStyle.styleSlug, toPersistedCustomStyle(formData));
   };
 
   // 二次确认删除自定义样式
@@ -161,23 +179,42 @@ function StyleFields({ customStyle, deleteStyle, updateStyle, isBuiltin }) {
 /**
  * 样式的折叠手风琴壳组件
  */
-function StyleAccordion({ customStyle, deleteStyle, updateStyle, isBuiltin }) {
+export function StyleAccordion({ customStyle, deleteStyle, updateStyle }) {
   const [expanded, setExpanded] = useState(false);
+  useRevealSearchTarget(setExpanded, ["style_name", "style_code"]);
+  const i18n = useI18n();
+  const { isBuiltin } = customStyle;
+  const previewCode = getCompactStylePreviewCode(customStyle);
+  const previewClass = useMemo(
+    () =>
+      previewCode
+        ? css`
+            ${previewCode}
+          `
+        : undefined,
+    [previewCode]
+  );
 
   const handleChange = (e) => {
     setExpanded((pre) => !pre);
   };
 
   return (
-    <Accordion expanded={expanded} onChange={handleChange}>
+    <Accordion
+      className="kt-style-card"
+      expanded={expanded}
+      onChange={handleChange}
+    >
       <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-        <Typography
-          sx={{
-            overflowWrap: "anywhere",
-          }}
-        >
-          {`${customStyle.styleName}`}
-        </Typography>
+        <Box className="kt-style-card__summary">
+          <span>{i18n("style_preview_source")}</span>
+          <span className={previewClass}>
+            {i18n("style_preview_translation")}
+          </span>
+          <Typography sx={{ overflowWrap: "anywhere" }}>
+            {customStyle.styleName}
+          </Typography>
+        </Box>
       </AccordionSummary>
       <AccordionDetails>
         {expanded && (
@@ -194,14 +231,48 @@ function StyleAccordion({ customStyle, deleteStyle, updateStyle, isBuiltin }) {
 }
 
 /**
+ * 下拉选项图标 + 文案的内联排布（参照 Apis.js MenuItem 内联图标先例；
+ * SettingsSelect 的 label 天然接受 React 节点，SettingsSelect 自身零改造）。
+ * 图标由 GripGlyph 纯展示渲染；hidden 项不渲染手柄，textarea 回退原生 resize。
+ *
+ * @param {string} variant 手柄样式 key。
+ * @param {string} text 选项文案。
+ * @returns {JSX.Element}
+ */
+function gripOptionLabel(variant, text) {
+  return (
+    <Box
+      component="span"
+      sx={{ display: "inline-flex", alignItems: "center", gap: 1 }}
+    >
+      <GripGlyph variant={variant} />
+      {text}
+    </Box>
+  );
+}
+
+/**
  * 译文展现样式设置主页面组件 (StylesSetting)
  */
 export default function StylesSetting() {
   const i18n = useI18n();
+  const { setting, updateSetting } = useSetting();
+  const [showStyleManager, setShowStyleManager] = useState(false);
+  const [hasOpenedStyleManager, setHasOpenedStyleManager] = useState(false);
+  useRevealSearchTarget(setShowStyleManager, [
+    "settings_style_library",
+    "style_name",
+    "style_code",
+  ]);
+  useRevealSearchTarget(setHasOpenedStyleManager, [
+    "settings_style_library",
+    "style_name",
+    "style_code",
+  ]);
   // 自定义 CSS 列表 Hook
-  const { customStyles, addStyle, deleteStyle, updateStyle } = useStyleList();
+  const { addStyle, deleteStyle, updateStyle } = useStyleList();
   // 系统内置的只读样式配置列表
-  const { builtinStyles } = useAllTextStyles();
+  const { builtinStyles, customStyles } = useAllTextStyles();
 
   // 添加新 CSS 样式
   const handleClick = (e) => {
@@ -209,46 +280,138 @@ export default function StylesSetting() {
     addStyle();
   };
 
+  const setStyleManagerVisibility = (visible) => {
+    if (visible) setHasOpenedStyleManager(true);
+    setShowStyleManager(visible);
+  };
+
+  const darkMode = setting.darkMode || "auto";
+  const gripStyle = useTextareaGripStyle();
+
   return (
     <Box>
-      <Stack spacing={3}>
-        {/* 新增样式按钮 */}
-        <Box>
-          <Button
-            size="small"
-            id="add-style-button"
-            variant="contained"
-            onClick={handleClick}
-            startIcon={<AddIcon />}
-          >
-            {i18n("add")}
-          </Button>
-        </Box>
+      <SettingsSection title={i18n("settings_interface_theme")}>
+        <SettingsCard>
+          <SettingsRow label={i18n("settings_appearance_mode")}>
+            <SettingsSegmented
+              value={darkMode}
+              label={i18n("settings_appearance_mode")}
+              onChange={(value) => updateSetting({ darkMode: value })}
+              items={[
+                { value: "light", label: i18n("settings_theme_light") },
+                { value: "dark", label: i18n("settings_theme_dark") },
+                { value: "auto", label: i18n("settings_theme_system") },
+              ]}
+            />
+          </SettingsRow>
+        </SettingsCard>
+      </SettingsSection>
 
-        {/* 用户自定义的可修改样式列表 */}
-        <Box>
-          {customStyles.map((customStyle) => (
-            <StyleAccordion
-              key={customStyle.styleSlug}
-              customStyle={customStyle}
-              deleteStyle={deleteStyle}
-              updateStyle={updateStyle}
+      <SettingsSection title={i18n("settings_textarea_grip_style")}>
+        <SettingsCard>
+          <SettingsRow
+            label={i18n("settings_textarea_grip_style")}
+            description={i18n("settings_textarea_grip_style_desc")}
+          >
+            <SettingsSelect
+              value={gripStyle}
+              label={i18n("settings_textarea_grip_style")}
+              onChange={(value) => updateSetting({ textareaGripStyle: value })}
+              options={TEXTAREA_GRIP_STYLE_KEYS.map((key) => ({
+                value: key,
+                label: gripOptionLabel(
+                  key,
+                  i18n(`grip_style_${key.replace(/-/g, "_")}`)
+                ),
+              }))}
             />
-          ))}
-        </Box>
-        {/* 插件内置的只读系统样式列表 */}
-        <Box>
-          {builtinStyles.map((customStyle) => (
-            <StyleAccordion
-              key={customStyle.styleSlug}
-              customStyle={customStyle}
-              deleteStyle={deleteStyle}
-              updateStyle={updateStyle}
-              isBuiltin={true}
-            />
-          ))}
-        </Box>
-      </Stack>
+          </SettingsRow>
+        </SettingsCard>
+      </SettingsSection>
+
+      <SettingsSection title={i18n("settings_translation_styles")}>
+        <SettingsCard>
+          <SettingsRow
+            label={i18n("settings_custom_css")}
+            description={i18n("settings_custom_css_description")}
+          >
+            <Button
+              size="small"
+              variant="contained"
+              onClick={() => setStyleManagerVisibility(true)}
+            >
+              {i18n("edit")}
+            </Button>
+          </SettingsRow>
+          <SettingsRow
+            label={i18n("settings_style_library")}
+            description={i18n("settings_style_library_description")
+              .replace("{0}", String(customStyles.length))
+              .replace("{1}", String(builtinStyles.length))}
+          >
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => setStyleManagerVisibility(!showStyleManager)}
+            >
+              {showStyleManager ? i18n("hide") : i18n("edit")}
+            </Button>
+          </SettingsRow>
+        </SettingsCard>
+      </SettingsSection>
+
+      {hasOpenedStyleManager && (
+        <Stack
+          className="kt-style-manager"
+          spacing={3}
+          hidden={!showStyleManager}
+          aria-hidden={!showStyleManager}
+          sx={{ display: showStyleManager ? "flex" : "none" }}
+        >
+          <Box>
+            <Button
+              size="small"
+              id="add-style-button"
+              variant="contained"
+              onClick={handleClick}
+              startIcon={<AddIcon />}
+            >
+              {i18n("add")}
+            </Button>
+          </Box>
+
+          <section>
+            <Typography component="h2" className="kt-options-section-title">
+              {i18n("custom_styles")}
+            </Typography>
+            <Box className="kt-style-grid">
+              {customStyles.map((customStyle) => (
+                <StyleAccordion
+                  key={customStyle.styleSlug}
+                  customStyle={customStyle}
+                  deleteStyle={deleteStyle}
+                  updateStyle={updateStyle}
+                />
+              ))}
+            </Box>
+          </section>
+          <section>
+            <Typography component="h2" className="kt-options-section-title">
+              {i18n("builtin_styles")}
+            </Typography>
+            <Box className="kt-style-grid">
+              {builtinStyles.map((customStyle) => (
+                <StyleAccordion
+                  key={customStyle.styleSlug}
+                  customStyle={customStyle}
+                  deleteStyle={deleteStyle}
+                  updateStyle={updateStyle}
+                />
+              ))}
+            </Box>
+          </section>
+        </Stack>
+      )}
     </Box>
   );
 }
