@@ -91,7 +91,7 @@ Last revalidated against:
 
 ```text
 ID: KP-002
-Status: proposed
+Status: obsolete
 Why required:
   YouTubeCaptionProvider.updateSetting({name, value}) (YouTubeCaptionProvider.js:320)
   already handles isBilingual, displayOrder, blurTranslation, segSlug, aiContextSlug and
@@ -113,17 +113,26 @@ Removal condition:
   Upstream accepts runtime updates for these fields.
 Tests:
   Contract test per field: change value through the intended KCL command, assert the
-  manager actually uses it on the next translation, assert the change survives an SPA
-  navigation without leaking to the previous video.
+  manager actually uses it on the next translation, assert the change survives an
+  SPA navigation without leaking to the previous video.
+Obsolete (2026-10-29, UP-04 re-review against v2.1.1):
+  v2.1.1 updateSetting (YouTubeCaptionProvider.js:326) now has an explicit apiSlug
+  branch — runtime provider switching with disabled-API filtering, menu refresh and
+  full reprocessing (previousApiSlug passed through). toLang/enabled are accepted by
+  the generic `this.#setting[name] = value` path (enabled has dedicated startup
+  handling). Removal condition met: upstream accepts runtime updates for all three
+  fields. KCL follow-up (Kisu-side, not a carried patch): setSubtitleProvider() can
+  call provider.updateSetting({name:"apiSlug", value}) through the KP-001-adjacent
+  instance surface instead of the next-load PUTRULE shortcut.
 Last revalidated against:
-  v2.0.32 (7dfc03eb)
+  v2.1.1 (a1279f2)
 ```
 
 ## KP-003 — Idempotent page translate / stop
 
 ```text
 ID: KP-003
-Status: proposed
+Status: obsolete
 Why required:
   The only page translation control is MSG_TRANS_TOGGLE, which routes to Translator.toggle()
   (src/libs/translator.js:3943). A toggle is not idempotent. Kisu product semantics need
@@ -144,8 +153,16 @@ Removal condition:
 Tests:
   Call translatePage() twice — assert one translation, no duplicate DOM work. Call
   stopPageTranslation() on an idle page — assert no state change and no error.
+Obsolete (2026-10-29, UP-04 re-review against v2.1.1):
+  Both removal-condition arms are satisfied. (1) Kisu accepted the documented KCL
+  composition: translatePage()/stopPageTranslation() shipped and tested in
+  kcl/page.js (PR #5, MVP-08) as GETRULE → conditional TOGGLE with in-flight
+  guards. (2) v2.1.1's Translator now carries internally idempotent enable() /
+  disable() methods (early-return guards on #enabled at translator.js:5203/5253),
+  though they are not yet exposed as messages. No code carry was ever required;
+  the proposal is moot.
 Last revalidated against:
-  v2.0.32 (7dfc03eb)
+  v2.1.1 (a1279f2)
 ```
 
 ## KP-004 — Page state change notification
@@ -171,7 +188,51 @@ Tests:
   Trigger translation from a non-Kisu entry point (shortcut or toolbar) and assert the
   Kisu surface updates without being reopened.
 Last revalidated against:
-  v2.0.32 (7dfc03eb)
+  v2.1.1 (a1279f2) — still required: translator.js has zero dispatchEvent/EVENT_KISS
+  emission (grep 2026-10-29); translatorManager's EVENT_KISS_INNER dispatches are
+  inbound-message re-fires (MSG_OPEN_TRANBOX / MSG_TRANSBOX_TOGGLE), not page-state
+  notifications. The pull model plus optimistic updates remains the only option.
+```
+
+## KP-005 — Mount the Kisu UI into the real extension entry pages
+
+```text
+ID: KP-005
+Status: active
+Why required:
+  The real extension entry pages (src/popup.js, src/options.js) render only the
+  legacy upstream UI; without wiring, no build ever shows Kisu surfaces. The
+  Kisu assembly roots (mountPopupApp / mountOptionsApp) and their full test
+  coverage already exist (popupApp.test.js / optionsApp.test.js); the missing
+  piece is the TRACK-side mount.
+Upstream-owned files touched:
+  src/popup.js — additive mount of the Kisu popup app into a separate container
+    below the legacy popup (imports + ~30 wiring lines; no upstream behavior
+    change; failure of the mount degrades to the legacy popup only)
+  src/options.js — additive mount of the Kisu settings app below the legacy page
+    (same shape); getStatus adapter reports TRANSPORT_UNAVAILABLE because the
+    options page has no subtitle-host tab — honest capability expression, no
+    invented runtime state; onOpenLegacy scrolls to the legacy UI on this page
+  config-overrides.js — ModuleScopePlugin allowance for the single governance
+    file docs/upstream/baseline.json (the Kisu assembly derives KISU_VERSION
+    from it via kcl/version.js; without the allowance the production build
+    rejects any src/kisu import)
+Kisu consumer:
+  Browser-extension users of a real build; UP-05 smoke scenarios depend on
+  this mount. UI-replacement/consolidation is future product work — this patch
+  is deliberately additive so legacy and Kisu surfaces coexist.
+Could be upstreamed generically:
+  No — the mounted app is Kisu-specific; this is a deliberate downstream fork
+  of the entry pages.
+Removal condition:
+  Deleting the two mount blocks restores the pure upstream build.
+Tests:
+  popupApp.test.js / optionsApp.test.js (mount roots, real-controller wiring);
+  build:chrome artifact contains mountPopupApp/mountOptionsApp; real-build
+  visual check can revisit the deferred DES-10 screenshots (INH-1211).
+Implemented: 2026-10-29 (INH-2162 / UP-03b)
+Last revalidated against:
+  v2.1.1 (a1279f2) on upstream-sync/2026-10-28
 ```
 
 ---
@@ -222,6 +283,28 @@ Outcome: provider .js auto-merged keeping getStatusSnapshot/getYouTubeCaptionSta
   side + KP-001 snapshot describe block re-applied (upstream evolved the file
   heavily; snapshot tests green on v2.1.1). Merged tree: 265 suites / 4227 tests
   ALL PASSING. EU-001..004 all verified ancestors of v2.1.1 → retired as obsolete
-  (baseline.json updated). KP-005 (entry wiring, INH-2162) planned as the next
-  TRACK patch, to be registered on implementation.
+  (baseline.json updated). KP-005 implemented next day on this baseline
+  (INH-2162 / UP-03b): additive mounts in src/popup.js and src/options.js,
+  registered as active above.
+
+Date: 2026-10-29 (UP-04 full re-review against v2.1.1 / INH-1216)
+Baseline: v2.1.1 (a1279f2) + KP-005 on upstream-sync/2026-10-28 (+KP-005 wiring commit)
+Patches reviewed: KP-001 (active, unchanged), KP-002 (proposed → obsolete),
+  KP-003 (proposed → obsolete), KP-004 (proposed, still required),
+  KP-005 (active, this branch)
+Outcome:
+  KP-002 → obsolete: v2.1.1 updateSetting (YouTubeCaptionProvider.js:326) gained
+    an explicit apiSlug branch (disabled-API filtering + menu refresh + full
+    reprocessing); toLang/enabled flow through the generic assignment path.
+    Removal condition met.
+  KP-003 → obsolete: KCL composition shipped and tested (kcl/page.js, PR #5);
+    v2.1.1 Translator also gained internally idempotent enable()/disable()
+    (translator.js:5203/5253, early-return guards) though not exposed as messages.
+    No code carry was ever required.
+  KP-004 → still required (proposed): translator.js has zero event emission;
+    translatorManager's EVENT_KISS_INNER dispatches are inbound re-fires only.
+    Pull model + optimistic updates remains the only option.
+  KP-005 → active, unchanged (this branch).
+Patch queue after UP-04: 2 active (KP-001, KP-005), 2 obsolete (KP-002, KP-003),
+  1 proposed (KP-004). EU-001..004 retired at UP-03.
 ```
