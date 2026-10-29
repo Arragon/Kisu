@@ -87,6 +87,7 @@ const baseContent = {
     videoSubtitle:
       "Watch these introductions to explore the main features and workflows.",
     videoLabel: "KISS Translator introduction video",
+    watchOnYouTube: "Watch on YouTube",
     featureTitle: "Translation workspace",
     featureSubtitle:
       "A compact dashboard for reading, selecting, writing, watching, and building with your preferred translation providers.",
@@ -311,6 +312,7 @@ const translations = {
     videoSubtitle:
       "通过这些介绍视频了解 KISS Translator 的主要功能和使用方式。",
     videoLabel: "KISS Translator 介绍视频",
+    watchOnYouTube: "在 YouTube 观看",
     featureTitle: "翻译工作台",
     featureSubtitle:
       "覆盖阅读、划词、写作、视频字幕和自定义接口的紧凑能力面板。",
@@ -377,6 +379,7 @@ const translations = {
     videoSubtitle:
       "透過這些介紹影片瞭解 KISS Translator 的主要功能與使用方式。",
     videoLabel: "KISS Translator 介紹影片",
+    watchOnYouTube: "在 YouTube 觀看",
     featureTitle: "翻譯工作台",
     featureSubtitle: "覆蓋閱讀、劃詞、寫作、影片字幕和自訂介面的緊湊能力面板。",
     ecosystemTitle: "為可控而設計",
@@ -442,6 +445,7 @@ const translations = {
     videoSubtitle:
       "紹介動画で KISS Translator の主な機能と使い方をご覧ください。",
     videoLabel: "KISS Translator 紹介動画",
+    watchOnYouTube: "YouTube で見る",
     featureTitle: "翻訳ワークスペース",
     featureSubtitle:
       "読む、選ぶ、書く、見る、作るための翻訳機能をコンパクトにまとめました。",
@@ -508,6 +512,7 @@ const translations = {
     videoSubtitle:
       "소개 동영상에서 KISS Translator의 주요 기능과 사용 방법을 확인하세요.",
     videoLabel: "KISS Translator 소개 동영상",
+    watchOnYouTube: "YouTube에서 보기",
     featureTitle: "번역 작업 공간",
     featureSubtitle:
       "읽기, 선택, 작성, 시청, 커스텀 API 구성을 위한 번역 기능을 한곳에 모았습니다.",
@@ -576,6 +581,7 @@ const translations = {
     videoSubtitle:
       "Découvrez les principales fonctions et méthodes de travail de KISS Translator.",
     videoLabel: "Vidéo de présentation de KISS Translator",
+    watchOnYouTube: "Regarder sur YouTube",
     featureTitle: "Espace de traduction",
     featureSubtitle:
       "Un tableau de bord compact pour lire, selectionner, ecrire, regarder et brancher vos services de traduction.",
@@ -644,6 +650,7 @@ const translations = {
     videoSubtitle:
       "Lernen Sie die wichtigsten Funktionen und Arbeitsabläufe von KISS Translator kennen.",
     videoLabel: "KISS Translator Einführungsvideo",
+    watchOnYouTube: "Auf YouTube ansehen",
     featureTitle: "Ubersetzungsarbeitsplatz",
     featureSubtitle:
       "Ein kompaktes Dashboard zum Lesen, Auswahlen, Schreiben, Anschauen und Anbinden Ihrer Ubersetzungsdienste.",
@@ -712,6 +719,7 @@ const translations = {
     videoSubtitle:
       "Descubre las funciones y los flujos de trabajo principales de KISS Translator.",
     videoLabel: "Vídeo de introducción de KISS Translator",
+    watchOnYouTube: "Ver en YouTube",
     featureTitle: "Espacio de traduccion",
     featureSubtitle:
       "Un panel compacto para leer, seleccionar, escribir, ver videos y conectar tus proveedores de traduccion.",
@@ -780,6 +788,7 @@ const translations = {
     videoSubtitle:
       "Khám phá các tính năng và quy trình làm việc chính của KISS Translator qua các video này.",
     videoLabel: "Video giới thiệu KISS Translator",
+    watchOnYouTube: "Xem trên YouTube",
     installMeta: {
       extension: "Tiện ích trình duyệt",
       release: "Gói phát hành",
@@ -851,6 +860,7 @@ const translations = {
     videoSubtitle:
       "Познакомьтесь с основными функциями и сценариями работы KISS Translator.",
     videoLabel: "Обзорное видео KISS Translator",
+    watchOnYouTube: "Смотреть на YouTube",
     installMeta: {
       extension: "Расширение браузера",
       release: "Пакет выпуска",

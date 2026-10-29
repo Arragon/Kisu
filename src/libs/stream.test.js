@@ -16,9 +16,12 @@ import {
   parseStreamingSegments,
 } from "./stream";
 import {
+  OPT_TRANS_CLAUDE,
   OPT_TRANS_EPHONEAI,
+  OPT_TRANS_APIMART,
   OPT_TRANS_GEMINI,
   OPT_TRANS_ORCAROUTER,
+  OPT_TRANS_REQUESTY,
 } from "../config";
 
 describe("createRealtimeStreamParser", () => {
@@ -113,6 +116,14 @@ describe("getStreamDelta", () => {
     expect(getStreamDelta(chunk, OPT_TRANS_EPHONEAI)).toBe("hello");
   });
 
+  test("extracts APIMart as an OpenAI-compatible stream", () => {
+    const chunk = {
+      choices: [{ delta: { content: "world" } }],
+    };
+
+    expect(getStreamDelta(chunk, OPT_TRANS_APIMART)).toBe("world");
+  });
+
   test("extracts OrcaRouter as an OpenAI-compatible stream", () => {
     const chunk = {
       choices: [{ delta: { content: "敏" }, finish_reason: null, index: 0 }],
@@ -121,6 +132,16 @@ describe("getStreamDelta", () => {
 
     expect(getStreamDelta(chunk, OPT_TRANS_ORCAROUTER)).toBe("敏");
     expect(getStreamDelta({ choices: [] }, OPT_TRANS_ORCAROUTER)).toBe("");
+  });
+
+  test("extracts Requesty as an OpenAI-compatible stream", () => {
+    const chunk = {
+      choices: [{ delta: { content: "敏" }, finish_reason: null, index: 0 }],
+      object: "chat.completion.chunk",
+    };
+
+    expect(getStreamDelta(chunk, OPT_TRANS_REQUESTY)).toBe("敏");
+    expect(getStreamDelta({ choices: [] }, OPT_TRANS_REQUESTY)).toBe("");
   });
 
   test("extracts only text step deltas from Gemini interactions", () => {
@@ -175,6 +196,34 @@ describe("getStreamDelta", () => {
         OPT_TRANS_GEMINI
       )
     ).toThrow("bad request");
+  });
+
+  test("extracts only text deltas from Claude content_block_delta events", () => {
+    expect(
+      getStreamDelta(
+        {
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "text_delta", text: "你好" },
+        },
+        OPT_TRANS_CLAUDE
+      )
+    ).toBe("你好");
+    // thinking_delta 无 .text 字段，自然排除
+    expect(
+      getStreamDelta(
+        {
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "thinking_delta", thinking: "推理过程" },
+        },
+        OPT_TRANS_CLAUDE
+      )
+    ).toBe("");
+    expect(getStreamDelta({ type: "message_start" }, OPT_TRANS_CLAUDE)).toBe(
+      ""
+    );
+    expect(getStreamDelta({ type: "message_stop" }, OPT_TRANS_CLAUDE)).toBe("");
   });
 });
 

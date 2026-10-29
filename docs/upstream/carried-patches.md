@@ -84,7 +84,7 @@ Tests:
 Implemented: 2026-10-25 (M0 rebuild; original ADR-011 text lost — decision re-derived
   from the INH-1228 design-evidence comment, see docs/architecture/decisions.md).
 Last revalidated against:
-  v2.0.32 (7dfc03eb) + EU-001..004 on next@m0-start (6037227)
+  v2.1.1 (a1279f2) on upstream-sync/2026-10-28 (248f7e7) — UP-03 integration
 ```
 
 ## KP-002 — Extend `updateSetting` to cover provider, language and enabled
@@ -209,4 +209,19 @@ Outcome: evidence-based diff of the whole subtitle-domain TRACK surface vs m0-st
   next-load commands (PRs #9/#10) — no real-time channel, live switching deferred
   to KP-002 + D3. Verdict: divergence confined to KP-001 as registered; no
   unregistered TRACK modification; audit PASS.
+
+Date: 2026-10-28 (UP-03 v2.1.1 integration / INH-1215)
+Baseline: v2.1.1 (a1279f2) on upstream-sync/2026-10-28 (248f7e7)
+Patches reviewed: KP-001 (active, revalidated & re-applied), KP-002/KP-003/KP-004
+  (proposed; still required — upstream shows no runtime updateSetting branches, no
+  idempotent enable/disable, no state-change event in v2.1.1; line references
+  shifted, full re-review queued for UP-04)
+Outcome: provider .js auto-merged keeping getStatusSnapshot/getYouTubeCaptionStatus
+  (upstream refactored the same file without touching the accessor region — no
+  equivalent hook added, KP-001 remains required). Test file resolved to upstream
+  side + KP-001 snapshot describe block re-applied (upstream evolved the file
+  heavily; snapshot tests green on v2.1.1). Merged tree: 265 suites / 4227 tests
+  ALL PASSING. EU-001..004 all verified ancestors of v2.1.1 → retired as obsolete
+  (baseline.json updated). KP-005 (entry wiring, INH-2162) planned as the next
+  TRACK patch, to be registered on implementation.
 ```

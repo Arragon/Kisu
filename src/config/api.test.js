@@ -1,5 +1,6 @@
 import {
   API_SPE_TYPES,
+  OPT_ALL_TRANS_TYPES,
   DEFAULT_API_LIST,
   DEFAULT_API_TYPE,
   OPT_LANGS_FROM_SPEC,
@@ -14,13 +15,17 @@ import {
   normalizeApiThinkingSettings,
   normalizeApiModelListUrls,
   OPT_TRANS_CLOUDFLAREAI,
+  OPT_TRANS_BUILTINAI,
   OPT_TRANS_DEEPSEEK,
   OPT_TRANS_EPHONEAI,
   OPT_TRANS_CEREBRAS,
   OPT_TRANS_CLAUDE,
   OPT_TRANS_GEMINI,
   OPT_TRANS_GEMINI_2,
+  OPT_TRANS_GOOGLE,
+  OPT_TRANS_GOOGLE_2,
   OPT_TRANS_ALIYUNBAILIAN,
+  OPT_TRANS_APIMART,
   OPT_TRANS_MICROSOFT,
   OPT_TRANS_SILICONFLOW,
   OPT_TRANS_OPENAI,
@@ -40,6 +45,25 @@ test("uses Microsoft as the fallback default API", () => {
 test("includes Microsoft in the built-in API list", () => {
   expect(
     DEFAULT_API_LIST.some((api) => api.apiType === OPT_TRANS_MICROSOFT)
+  ).toBe(true);
+});
+
+test("enables only the four initial translators while retaining every preset", () => {
+  expect(DEFAULT_API_LIST.map((api) => api.apiType)).toEqual(
+    OPT_ALL_TRANS_TYPES
+  );
+  expect(
+    DEFAULT_API_LIST.filter((api) => !api.isDisabled).map((api) => api.apiType)
+  ).toEqual([
+    OPT_TRANS_BUILTINAI,
+    OPT_TRANS_GOOGLE,
+    OPT_TRANS_GOOGLE_2,
+    OPT_TRANS_MICROSOFT,
+  ]);
+  expect(
+    DEFAULT_API_LIST.filter((api) => api.isDisabled).every(
+      (api) => api.sortOrder === 999
+    )
   ).toBe(true);
 });
 
@@ -71,6 +95,29 @@ test("configures the official and free Yandex translators", () => {
   expect(OPT_LANGS_TO_SPEC[OPT_TRANS_YANDEX].get("zh-TW")).toBe("zh");
   expect(OPT_LANGS_TO_SPEC[OPT_TRANS_YANDEX].get("nb")).toBe("no");
   expect(OPT_LANGS_FROM_SPEC[OPT_TRANS_YANDEXFREE].get("auto")).toBe("");
+});
+
+test("configures APIMart as a sponsor OpenAI-compatible translator", () => {
+  const apimart = DEFAULT_API_LIST.find(
+    (api) => api.apiType === OPT_TRANS_APIMART
+  );
+
+  expect(apimart).toMatchObject({
+    apiSlug: OPT_TRANS_APIMART,
+    apiType: OPT_TRANS_APIMART,
+    url: "https://api.apimart.ai/v1/chat/completions",
+    modelListUrl: "https://api.apimart.ai/v1/models",
+    model: "gpt-5.6-luna",
+    useBatchFetch: true,
+    useStream: true,
+  });
+  expect(API_SPE_TYPES.sponsors.has(OPT_TRANS_APIMART)).toBe(true);
+  expect(API_SPE_TYPES.ai.has(OPT_TRANS_APIMART)).toBe(true);
+  expect(API_SPE_TYPES.mulkeys.has(OPT_TRANS_APIMART)).toBe(true);
+  expect(API_SPE_TYPES.batch.has(OPT_TRANS_APIMART)).toBe(true);
+  expect(API_SPE_TYPES.context.has(OPT_TRANS_APIMART)).toBe(true);
+  expect(API_SPE_TYPES.stream.has(OPT_TRANS_APIMART)).toBe(true);
+  expect(API_SPE_TYPES.darkIcon.has(OPT_TRANS_APIMART)).toBe(true);
 });
 
 test("configures QwenMT as a single-request machine translation API", () => {
@@ -114,6 +161,63 @@ test("keeps disabled as the initial thinking mode", () => {
 });
 
 describe("unified thinking capabilities", () => {
+  test.each(["gpt-6-astra", " OPENAI/GPT-6-ASTRA "])(
+    "recognizes Astra efforts and mandatory reasoning for %s",
+    (model) => {
+      const options = { apiType: OPT_TRANS_OPENAI, model };
+      const capability = getThinkingCapability(options);
+      expect(capability.efforts.map(({ value }) => value)).toEqual([
+        "max",
+        "xhigh",
+        "high",
+        "medium",
+        "low",
+      ]);
+      expect(
+        normalizeThinkingSettings({ ...options, thinkingMode: "auto" })
+      ).toEqual({ thinkingMode: "auto", thinkingEffort: "_default" });
+      expect(
+        normalizeThinkingSettings({ ...options, thinkingMode: "enabled" })
+      ).toEqual({ thinkingMode: "enabled", thinkingEffort: null });
+      expect(
+        normalizeThinkingSettings({ ...options, thinkingMode: "disabled" })
+      ).toEqual({ thinkingMode: "disabled", thinkingEffort: "low" });
+      expect(
+        isThinkingMinimumFallback({ capability, thinkingMode: "disabled" })
+      ).toBe(true);
+      for (const thinkingEffort of ["max", "xhigh", "high", "medium", "low"]) {
+        expect(
+          normalizeThinkingSettings({
+            ...options,
+            thinkingMode: "enabled",
+            thinkingEffort,
+          }).thinkingEffort
+        ).toBe(thinkingEffort);
+      }
+      for (const thinkingEffort of ["none", "minimal"]) {
+        expect(
+          normalizeThinkingSettings({
+            ...options,
+            thinkingMode: "enabled",
+            thinkingEffort,
+          }).thinkingEffort
+        ).toBe("low");
+      }
+    }
+  );
+
+  test.each([
+    "gpt-6",
+    "gpt-6-other",
+    "gpt-6-astra-pro",
+    "gpt-6-astra-unknown",
+    "gpt-6-astra-2026-03-01",
+  ])("does not assume Astra capabilities for %s", (model) => {
+    expect(
+      getThinkingCapability({ apiType: OPT_TRANS_OPENAI, model })
+    ).toBeNull();
+  });
+
   test.each(["gpt-5.6-sol", "gpt-5.4-pro", "gpt-5.3-codex", "gpt-5"])(
     "keeps the OpenAI interface default for model %s",
     (model) => {
@@ -158,6 +262,12 @@ describe("unified thinking capabilities", () => {
     expect(
       getThinkingCapability({
         apiType: OPT_TRANS_EPHONEAI,
+        model: "provider/unknown-model",
+      })
+    ).toBeNull();
+    expect(
+      getThinkingCapability({
+        apiType: OPT_TRANS_APIMART,
         model: "provider/unknown-model",
       })
     ).toBeNull();
