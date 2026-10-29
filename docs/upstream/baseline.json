@@ -1,10 +1,17 @@
 {
   "kisuVersion": "0.0.0-dev",
   "kissBaseline": {
-    "release": "v2.0.32",
-    "commit": "7dfc03ebc7f10530681109f6a5aec982a5573936",
-    "tagObject": "a7a2faa955ea5ab8b05b17c75d64f1ac9f64c428",
-    "releasedAt": "2026-08-12T18:28:47Z"
+    "release": "v2.1.1",
+    "commit": "a1279f2517bd478ef1dd93b941f9177094486cd4",
+    "tagObject": "a55d1a3fe603f4ee8fb98c6b115dd2292bd9515e",
+    "integratedAt": "2026-10-28",
+    "integratedOn": "upstream-sync/2026-10-28 (248f7e7, UP-03 / INH-1215; stacked on feat/DES09-a11y-polish until #68-#74 merge)",
+    "previousBaseline": {
+      "release": "v2.0.32",
+      "commit": "7dfc03ebc7f10530681109f6a5aec982a5573936",
+      "tagObject": "a7a2faa955ea5ab8b05b17c75d64f1ac9f64c428",
+      "releasedAt": "2026-08-12T18:28:47Z"
+    }
   },
   "watchedDev": {
     "commit": "226e5780f5ccee1cd42d4167518632318c2f7d7b",
@@ -17,8 +24,9 @@
       "upstreamCommit": "ca4ea90970ca4868de947463951033d7a77d1d2d",
       "upstreamPr": 1045,
       "title": "Remember subtitle position across videos",
-      "carriedOn": "next",
+      "carriedOn": "next (until v2.1.1 integration)",
       "localCommit": "749f5d744ee0e30ede65c5a5637563c3808e8baa",
+      "status": "obsolete — absorbed by v2.1.1 (merge-base --is-ancestor verified 2026-10-28)",
       "reason": "User-visible defect in core flow 3 (YouTube subtitles): the subtitle position resets on every video. P5 builds directly on this subsystem, so carrying the fix is cheaper than working against a known defect."
     },
     {
@@ -26,8 +34,9 @@
       "upstreamCommit": "f5f543a291eb2fcd7885400828d694579fd7011e",
       "upstreamPr": 1051,
       "title": "fix(gemini): stop sending the unsupported minimal thinking level to 3.x non-lite flash models",
-      "carriedOn": "next",
+      "carriedOn": "next (until v2.1.1 integration)",
       "localCommit": "230375d12ce63cdaaf17602f5cb70bcb99c739e9",
+      "status": "obsolete — absorbed by v2.1.1 (merge-base --is-ancestor verified 2026-10-28)",
       "reason": "Provider-level request defect: an unsupported parameter was sent to Gemini 3.x non-lite flash models. Self-contained in src/apis/trans.js and src/config/api.js."
     },
     {
@@ -35,8 +44,9 @@
       "upstreamCommit": "02d362ea7e59c7ca991fc7e9221db81743bbf215",
       "upstreamPr": 1061,
       "title": "fix(webui): floating button disappears when its cross-viewport coordinates overflow",
-      "carriedOn": "next",
+      "carriedOn": "next (until v2.1.1 integration)",
       "localCommit": "d8760c728a6e8ef8193dee67c338b7c9a85a6ccf",
+      "status": "obsolete — absorbed by v2.1.1 (merge-base --is-ancestor verified 2026-10-28)",
       "reason": "User-visible defect in core flow 2 (selection entry point): the floating button can vanish. Small, 2 files."
     },
     {
@@ -44,17 +54,18 @@
       "upstreamCommit": "c95bd46bead3a0e5947428f2b3b4ebb193be9207",
       "upstreamPr": 1050,
       "title": "fix(builtinai): fall back to the configured detection service when the built-in LanguageDetector is unavailable",
-      "carriedOn": "next",
+      "carriedOn": "next (until v2.1.1 integration)",
       "localCommit": "3a7a4e86cc176410983f4431e13183ffd17aa450",
+      "status": "obsolete — absorbed by v2.1.1 (merge-base --is-ancestor verified 2026-10-28)",
       "reason": "BuiltinAI translation failed outright with fromLang=auto on Chrome below 127, with built-in AI disabled, or with the model not downloaded, even when a remote detection service was configured. Also fixes a stale language-detection race in the selection surface.",
       "note": "Touches src/views/Selection/TranForm.js and TranCont.js, the files control-paths.md documents as the selection decision layer. See the reference drift section of that document."
     }
   ],
   "baselineEstablishedAt": "2026-09-13",
   "branchPolicy": {
-    "main": "Pristine stable baseline (v2.0.32) plus Kisu governance documents. No exceptional intakes.",
-    "next": "Integration branch. Carries EU-001 through EU-004 on top of the main baseline.",
-    "note": "Exceptional intakes are carried on next only, so main stays exactly reproducible and control-path line references against it remain valid. Promote them to main through normal integration once upstream ships them in a stable release, or earlier by explicit decision."
+    "main": "Pristine stable baseline (v2.1.1 after UP-03) plus Kisu governance documents. No exceptional intakes.",
+    "next": "Integration branch. EU-001..004 absorbed by the v2.1.1 integration; the only carried TRACK patch is KP-001 (see carried-patches.md).",
+    "note": "Exceptional intakes were historically carried on next only. All four (EU-001..004) proved to be ancestors of v2.1.1 and were retired at the UP-03 integration. Promote future intakes to main through normal integration once upstream ships them in a stable release, or earlier by explicit decision."
   },
   "namingConvention": {
     "EU-nnn": "Exceptional upstream intake: an upstream commit taken ahead of a stable release.",
